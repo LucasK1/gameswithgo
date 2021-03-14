@@ -7,48 +7,37 @@ import (
 	"strings"
 )
 
-type choices struct {
-	cmd        string
-	desc       string
-	nextNode   *storyNode
-	nextChoice *choices
+type choice struct {
+	cmd      string
+	desc     string
+	nextNode *storyNode
 }
 
 type storyNode struct {
 	text    string
-	choices *choices
+	choices []*choice
 }
 
 func (node *storyNode) addChoice(cmd string, desc string, nextNode *storyNode) {
-	choice := &choices{cmd, desc, nextNode, nil}
+	choice := &choice{cmd, desc, nextNode}
 
-	if node.choices == nil {
-		node.choices = choice
-	} else {
-		currentChoice := node.choices
-		for currentChoice.nextChoice != nil {
-			currentChoice = currentChoice.nextChoice
-		}
-		currentChoice.nextChoice = choice
-	}
+	node.choices = append(node.choices, choice)
 }
 
 func (node *storyNode) render() {
 	fmt.Println((node.text))
-	currentChoice := node.choices
-	for currentChoice != nil {
-		fmt.Println(currentChoice.cmd, ":", currentChoice.desc)
-		currentChoice = currentChoice.nextChoice
+	if node.choices != nil {
+		for _, choice := range node.choices {
+			fmt.Println(choice.cmd, ":", choice.desc)
+		}
 	}
 }
 
 func (node *storyNode) executeCmd(cmd string) *storyNode {
-	currentChoice := node.choices
-	for currentChoice != nil {
-		if strings.ToLower(currentChoice.cmd) == strings.ToLower(cmd) {
-			return currentChoice.nextNode
+	for _, choice := range node.choices {
+		if strings.ToLower(choice.cmd) == strings.ToLower(cmd) {
+			return choice.nextNode
 		}
-		currentChoice = currentChoice.nextChoice
 	}
 	fmt.Println("Sorry, I didn't understand that")
 	return node
@@ -68,6 +57,12 @@ func main() {
 	scanner = bufio.NewScanner((os.Stdin))
 
 	start := storyNode{text: `
+/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*
+/*   Wizards and Warlocks   /*
+/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*
+	`}
+
+	firstRoom := storyNode{text: `
 	You are in a large chamber, deep underground
 	You see three passages leading out. North, south and east.
 	`}
@@ -78,15 +73,17 @@ func main() {
 	trap := storyNode{text: "You fall down a huge hole and you die miserably"}
 	treasure := storyNode{text: "Goooooold!"}
 
-	start.addChoice("n", "Go North", &darkRoom)
-	start.addChoice("s", "Go South", &darkRoom)
-	start.addChoice("e", "Go East", &trap)
+	start.addChoice("", "Hit enter to start", &firstRoom)
+
+	firstRoom.addChoice("n", "Go North", &darkRoom)
+	firstRoom.addChoice("s", "Go South", &darkRoom)
+	firstRoom.addChoice("e", "Go East", &trap)
 
 	darkRoom.addChoice("s", "Try to go back", &grue)
 	darkRoom.addChoice("O", "Turn on your lantern", &darkRoomLit)
 
 	darkRoomLit.addChoice("n", "go north", &treasure)
-	darkRoomLit.addChoice("s", "go south", &start)
+	darkRoomLit.addChoice("s", "go south", &firstRoom)
 
 	start.play()
 
