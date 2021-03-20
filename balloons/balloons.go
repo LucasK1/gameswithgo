@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/png"
 	"os"
+	"time"
 
 	"github.com/veandco/go-sdl2/sdl"
 )
@@ -11,6 +12,7 @@ import (
 const winWidth, winHeight int = 800, 600
 
 type texture struct {
+	pos
 	pixels      []byte
 	w, h, pitch int
 }
@@ -33,12 +35,12 @@ func setPixel(x, y int, c rgba, pixels []byte) {
 
 }
 
-func (tex *texture) draw(p pos, pixels []byte) {
+func (tex *texture) draw(pixels []byte) {
 
 	for y := 0; y < tex.h; y++ {
+		screenY := int(tex.y) + y
 		for x := 0; x < tex.w; x++ {
-			screenY := y + int(p.y)
-			screenX := x + int(p.x)
+			screenX := int(tex.x) + x
 			if screenX >= 0 && screenX < winWidth && screenY >= 0 && screenY < winHeight {
 				texIndex := y*tex.pitch + x*4
 				screenIndex := screenY*winWidth*4 + screenX*4
@@ -52,39 +54,85 @@ func (tex *texture) draw(p pos, pixels []byte) {
 	}
 }
 
-func loadBalloons() *texture {
-	infile, err := os.Open("balloon_blue.png")
-	if err != nil {
-		panic(err)
-	}
-	defer infile.Close()
+func (tex *texture) drawAlpha(pixels []byte) {
 
-	img, err := png.Decode(infile)
-	if err != nil {
-		panic(err)
-	}
+	for y := 0; y < tex.h; y++ {
+		screenY := int(tex.y) + y
+		for x := 0; x < tex.w; x++ {
+			screenX := int(tex.x) + x
+			if screenX >= 0 && screenX < winWidth && screenY >= 0 && screenY < winHeight {
+				texIndex := y*tex.pitch + x*4
+				screenIndex := screenY*winWidth*4 + screenX*4
 
-	w := img.Bounds().Max.X
-	h := img.Bounds().Max.Y
+				srcR := int(tex.pixels[texIndex])
+				srcG := int(tex.pixels[texIndex+1])
+				srcB := int(tex.pixels[texIndex+2])
+				srcA := int(tex.pixels[texIndex+3])
 
-	balloonPixels := make([]byte, w*h*4)
-	bIndex := 0
+				dstR := int(pixels[screenIndex])
+				dstG := int(pixels[screenIndex+1])
+				dstB := int(pixels[screenIndex+2])
 
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			r, g, b, a := img.At(x, y).RGBA()
+				rstR := (srcR*255 + dstR*(255-srcA)) / 255
+				rstG := (srcG*255 + dstG*(255-srcA)) / 255
+				rstB := (srcB*255 + dstB*(255-srcA)) / 255
 
-			balloonPixels[bIndex] = byte(r / 256)
-			bIndex++
-			balloonPixels[bIndex] = byte(g / 256)
-			bIndex++
-			balloonPixels[bIndex] = byte(b / 256)
-			bIndex++
-			balloonPixels[bIndex] = byte(a / 256)
-			bIndex++
+				pixels[screenIndex] = byte(rstR)
+				pixels[screenIndex+1] = byte(rstG)
+				pixels[screenIndex+2] = byte(rstB)
+			}
 		}
 	}
-	return &texture{balloonPixels, w, h, w * 4}
+}
+
+func loadBalloons() []texture {
+
+	balloonStrs := []string{"balloon_red.png", "balloon_green.png", "balloon_blue.png"}
+	balloonTextures := make([]texture, len(balloonStrs))
+
+	for i, bStr := range balloonStrs {
+
+		infile, err := os.Open(bStr)
+		if err != nil {
+			panic(err)
+		}
+
+		defer infile.Close()
+
+		img, err := png.Decode(infile)
+		if err != nil {
+			panic(err)
+		}
+
+		w := img.Bounds().Max.X
+		h := img.Bounds().Max.Y
+
+		balloonPixels := make([]byte, w*h*4)
+		bIndex := 0
+
+		for y := 0; y < h; y++ {
+			for x := 0; x < w; x++ {
+				r, g, b, a := img.At(x, y).RGBA()
+
+				balloonPixels[bIndex] = byte(r / 256)
+				bIndex++
+				balloonPixels[bIndex] = byte(g / 256)
+				bIndex++
+				balloonPixels[bIndex] = byte(b / 256)
+				bIndex++
+				balloonPixels[bIndex] = byte(a / 256)
+				bIndex++
+			}
+		}
+		balloonTextures[i] = texture{pos{0, 0}, balloonPixels, w, h, w * 4}
+	}
+	return balloonTextures
+}
+
+func clear(pixels []byte) {
+	for i := range pixels {
+		pixels[i] = 0
+	}
 }
 
 func main() {
@@ -120,10 +168,12 @@ func main() {
 	defer tex.Destroy()
 
 	pixels := make([]byte, winWidth*winHeight*4)
-	balloonTexture := loadBalloons()
-	balloonTexture.draw(pos{0, 0}, pixels)
+	balloonTextures := loadBalloons()
 
+	dir := 1
 	for {
+		frameStart := time.Now()
+
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 			switch event.(type) {
 			case *sdl.QuitEvent:
@@ -131,10 +181,24 @@ func main() {
 			}
 		}
 
+		clear(pixels)
+
+		for _, tex := range balloonTextures {
+			tex.drawAlpha(pixels)
+		}
+		balloonTextures[1].x += float32(dir * 2)
+		if balloonTextures[1].x > 400 || balloonTextures[1].x < 0 {
+			dir *= -1
+		}
 		tex.Update(nil, pixels, winWidth*4)
 		renderer.Copy(tex, nil, nil)
 		renderer.Present()
+		elapsedTime := float32(time.Since(frameStart).Milliseconds())
+		fmt.Println(elapsedTime, "ms/frame")
 
-		sdl.Delay(16)
+		if elapsedTime < 5 {
+			sdl.Delay(5 - uint32(elapsedTime))
+			elapsedTime = float32(time.Since(frameStart).Milliseconds())
+		}
 	}
 }
