@@ -15,6 +15,27 @@ import (
 
 const winWidth, winHeight, winDepth int = 800, 600, 100
 
+type mouseState struct {
+	leftButton  bool
+	rightButton bool
+	x, y        int
+}
+
+func getMouseState() mouseState {
+	mouseX, mouseY, mouseButtonState := sdl.GetMouseState()
+
+	leftButton := mouseButtonState & sdl.ButtonLMask()
+	rightButton := mouseButtonState & sdl.ButtonRMask()
+
+	var result mouseState
+	result.x = int(mouseX)
+	result.y = int(mouseY)
+	result.leftButton = !(leftButton == 0)
+	result.rightButton = !(rightButton == 0)
+
+	return result
+}
+
 type balloon struct {
 	tex  *sdl.Texture
 	pos  Vector3
@@ -252,8 +273,11 @@ func main() {
 	cloudPixels := rescaleAndDraw(cloudNoise, min, max, cloudGradient, winWidth, winHeight)
 	cloudTexture := pixelsToTexture(renderer, cloudPixels, winWidth, winHeight)
 
-	balloons := loadBalloons(renderer, 20)
+	balloons := loadBalloons(renderer, 10)
 	var elapsedTime float32
+
+	currentMouseState := getMouseState()
+	prevMouseState := currentMouseState
 
 	for {
 		frameStart := time.Now()
@@ -263,6 +287,12 @@ func main() {
 			case *sdl.QuitEvent:
 				return
 			}
+		}
+
+		currentMouseState = getMouseState()
+
+		if !currentMouseState.leftButton && prevMouseState.leftButton {
+			fmt.Println("Left click")
 		}
 
 		renderer.Copy(cloudTexture, nil, nil)
@@ -279,12 +309,13 @@ func main() {
 
 		renderer.Present()
 		elapsedTime = float32(time.Since(frameStart).Milliseconds())
-		fmt.Println(elapsedTime, "ms/frame")
+		// fmt.Println(elapsedTime, "ms/frame")
 
 		if elapsedTime < 5 {
 			sdl.Delay(5 - uint32(elapsedTime))
 			elapsedTime = float32(time.Since(frameStart).Milliseconds())
 		}
-		sdl.Delay(16)
+
+		prevMouseState = currentMouseState
 	}
 }
