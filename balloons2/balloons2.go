@@ -3,27 +3,64 @@ package main
 import (
 	"fmt"
 	"image/png"
+	"math/rand"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/LucasK1/gameswithgo/noise"
+	. "github.com/LucasK1/gameswithgo/vec3"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-const winWidth, winHeight int = 800, 600
+const winWidth, winHeight, winDepth int = 800, 600, 100
 
 type balloon struct {
-	tex *sdl.Texture
-	pos
-	scale float32
-	w, h  int
+	tex  *sdl.Texture
+	pos  Vector3
+	dir  Vector3
+	w, h int
+}
+
+type balloonArray []*balloon
+
+func (balloons balloonArray) Len() int {
+	return len(balloons)
+}
+
+func (balloons balloonArray) Swap(i, j int) {
+	balloons[i], balloons[j] = balloons[j], balloons[i]
+}
+
+func (balloons balloonArray) Less(i, j int) bool {
+	diff := balloons[i].pos.Z - balloons[j].pos.Z
+	return diff < -0.5
+}
+
+func (balloon *balloon) update(elapsedTime float32) {
+	p := Add(balloon.pos, Multiply(balloon.dir, elapsedTime))
+
+	if p.X < 0 || p.X > float32(winWidth) {
+		balloon.dir.X = -balloon.dir.X
+	}
+	if p.Y < 0 || p.Y > float32(winHeight) {
+		balloon.dir.Y = -balloon.dir.Y
+	}
+	if p.Z < 0 || p.Z > float32(winDepth) {
+		balloon.dir.Z = -balloon.dir.Z
+	}
+
+	balloon.pos = Add(balloon.pos, Multiply(balloon.dir, elapsedTime))
+
 }
 
 func (balloon *balloon) draw(renderer *sdl.Renderer) {
-	newW := int32(float32(balloon.w) * balloon.scale)
-	newH := int32(float32(balloon.h) * balloon.scale)
-	x := int32(balloon.x - float32(newW)/2)
-	y := int32(balloon.y - float32(newH)/2)
+	scale := (balloon.pos.Z/200 + 1) / 2
+
+	newW := int32(float32(balloon.w) * scale)
+	newH := int32(float32(balloon.h) * scale)
+	x := int32(balloon.pos.X - float32(newW)/2)
+	y := int32(balloon.pos.Y - float32(newH)/2)
 
 	rect := &sdl.Rect{X: x, Y: y, W: newW, H: newH}
 
@@ -32,9 +69,6 @@ func (balloon *balloon) draw(renderer *sdl.Renderer) {
 
 type rgba struct {
 	r, g, b byte
-}
-type pos struct {
-	x, y float32
 }
 
 // func setPixel(x, y int, c rgba, pixels []byte) {
@@ -57,10 +91,10 @@ func pixelsToTexture(renderer *sdl.Renderer, pixels []byte, w, h int) *sdl.Textu
 	return tex
 }
 
-func loadBalloons(renderer *sdl.Renderer) []balloon {
+func loadBalloons(renderer *sdl.Renderer, numBalloons int) []*balloon {
 
 	balloonStrs := []string{"balloon_red.png", "balloon_green.png", "balloon_blue.png"}
-	balloons := make([]balloon, len(balloonStrs))
+	balloonTextures := make([]*sdl.Texture, len(balloonStrs))
 
 	for i, bStr := range balloonStrs {
 
@@ -103,7 +137,23 @@ func loadBalloons(renderer *sdl.Renderer) []balloon {
 			panic(err)
 		}
 
-		balloons[i] = balloon{tex, pos{float32(i * 120), float32(i * 120)}, float32(1+i) / 2, w, h}
+		balloonTextures[i] = tex
+
+	}
+	balloons := make([]*balloon, numBalloons)
+	for i := range balloons {
+		tex := balloonTextures[i%3]
+
+		pos := Vector3{X: rand.Float32() * float32(winWidth), Y: rand.Float32() * float32(winHeight), Z: rand.Float32() * float32(winDepth)}
+
+		dir := Vector3{X: rand.Float32() * 0.5, Y: rand.Float32() * 0.5, Z: rand.Float32() * 0.5}
+
+		_, _, w, h, err := tex.Query()
+		if err != nil {
+			panic(err)
+		}
+
+		balloons[i] = &balloon{tex, pos, dir, int(w), int(h)}
 	}
 	return balloons
 }
@@ -197,21 +247,14 @@ func main() {
 	defer renderer.Destroy()
 	sdl.SetHint(sdl.HINT_RENDER_SCALE_QUALITY, "1")
 
-	tex, err := renderer.CreateTexture(sdl.PIXELFORMAT_ABGR8888, sdl.TEXTUREACCESS_STREAMING, int32(winWidth), int32(winHeight))
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	defer tex.Destroy()
-
 	cloudNoise, min, max := noise.MakeNoise(noise.FBM, .009, .5, 3, 3, winWidth, winHeight)
 	cloudGradient := getGradient(rgba{0, 0, 255}, rgba{255, 255, 255})
 	cloudPixels := rescaleAndDraw(cloudNoise, min, max, cloudGradient, winWidth, winHeight)
 	cloudTexture := pixelsToTexture(renderer, cloudPixels, winWidth, winHeight)
 
-	balloons := loadBalloons(renderer)
+	balloons := loadBalloons(renderer, 20)
+	var elapsedTime float32
 
-	dir := 1
 	for {
 		frameStart := time.Now()
 
@@ -225,20 +268,23 @@ func main() {
 		renderer.Copy(cloudTexture, nil, nil)
 
 		for _, balloon := range balloons {
-			balloon.draw(renderer)
+			balloon.update(elapsedTime)
 		}
-		balloons[1].x += float32(dir * 2)
-		if balloons[1].x > 400 || balloons[1].x < 0 {
-			dir *= -1
+
+		sort.Sort(balloonArray(balloons))
+
+		for _, balloon := range balloons {
+			balloon.draw(renderer)
 		}
 
 		renderer.Present()
-		elapsedTime := float32(time.Since(frameStart).Milliseconds())
+		elapsedTime = float32(time.Since(frameStart).Milliseconds())
 		fmt.Println(elapsedTime, "ms/frame")
 
 		if elapsedTime < 5 {
 			sdl.Delay(5 - uint32(elapsedTime))
-			// elapsedTime = float32(time.Since(frameStart).Milliseconds())
+			elapsedTime = float32(time.Since(frameStart).Milliseconds())
 		}
+		sdl.Delay(16)
 	}
 }
