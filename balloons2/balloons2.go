@@ -16,6 +16,18 @@ type balloon struct {
 	tex *sdl.Texture
 	pos
 	scale float32
+	w, h  int
+}
+
+func (balloon *balloon) draw(renderer *sdl.Renderer) {
+	newW := int32(float32(balloon.w) * balloon.scale)
+	newH := int32(float32(balloon.h) * balloon.scale)
+	x := int32(balloon.x - float32(newW)/2)
+	y := int32(balloon.y - float32(newH)/2)
+
+	rect := &sdl.Rect{X: x, Y: y, W: newW, H: newH}
+
+	renderer.Copy(balloon.tex, nil, rect)
 }
 
 type rgba struct {
@@ -25,15 +37,15 @@ type pos struct {
 	x, y float32
 }
 
-func setPixel(x, y int, c rgba, pixels []byte) {
-	index := (y*winWidth + x) * 4
+// func setPixel(x, y int, c rgba, pixels []byte) {
+// 	index := (y*winWidth + x) * 4
 
-	if index < len(pixels)-4 && index >= 0 {
-		pixels[index] = c.r
-		pixels[index+1] = c.g
-		pixels[index+2] = c.b
-	}
-}
+// 	if index < len(pixels)-4 && index >= 0 {
+// 		pixels[index] = c.r
+// 		pixels[index+1] = c.g
+// 		pixels[index+2] = c.b
+// 	}
+// }
 
 func pixelsToTexture(renderer *sdl.Renderer, pixels []byte, w, h int) *sdl.Texture {
 	tex, err := renderer.CreateTexture(sdl.PIXELFORMAT_ABGR8888, sdl.TEXTUREACCESS_STREAMING, int32(w), int32(h))
@@ -85,16 +97,22 @@ func loadBalloons(renderer *sdl.Renderer) []balloon {
 			}
 		}
 		tex := pixelsToTexture(renderer, balloonPixels, w, h)
-		balloons[i] = balloon{tex, pos{float32(i * 60), float32(i * 60)}, float32(1 + i)}
+
+		err = tex.SetBlendMode(sdl.BLENDMODE_BLEND)
+		if err != nil {
+			panic(err)
+		}
+
+		balloons[i] = balloon{tex, pos{float32(i * 120), float32(i * 120)}, float32(1+i) / 2, w, h}
 	}
 	return balloons
 }
 
-func clear(pixels []byte) {
-	for i := range pixels {
-		pixels[i] = 0
-	}
-}
+// func clear(pixels []byte) {
+// 	for i := range pixels {
+// 		pixels[i] = 0
+// 	}
+// }
 
 func lerp(b1, b2 byte, pct float32) byte {
 	return byte(float32(b1) + pct*(float32(b2)-float32(b1)))
@@ -113,18 +131,18 @@ func getGradient(c1, c2 rgba) []rgba {
 	return result
 }
 
-func getDualGradient(c1, c2, c3, c4 rgba) []rgba {
-	result := make([]rgba, 256)
-	for i := range result {
-		pct := float32(i) / float32(255)
-		if pct < 0.5 {
-			result[i] = colorLerp(c1, c2, pct*float32(2))
-		} else {
-			result[i] = colorLerp(c3, c4, pct*float32(1.5)-float32(0.5))
-		}
-	}
-	return result
-}
+// func getDualGradient(c1, c2, c3, c4 rgba) []rgba {
+// 	result := make([]rgba, 256)
+// 	for i := range result {
+// 		pct := float32(i) / float32(255)
+// 		if pct < 0.5 {
+// 			result[i] = colorLerp(c1, c2, pct*float32(2))
+// 		} else {
+// 			result[i] = colorLerp(c3, c4, pct*float32(1.5)-float32(0.5))
+// 		}
+// 	}
+// 	return result
+// }
 
 func clamp(min, max, v int) int {
 	if v < min {
@@ -177,6 +195,7 @@ func main() {
 		return
 	}
 	defer renderer.Destroy()
+	sdl.SetHint(sdl.HINT_RENDER_SCALE_QUALITY, "1")
 
 	tex, err := renderer.CreateTexture(sdl.PIXELFORMAT_ABGR8888, sdl.TEXTUREACCESS_STREAMING, int32(winWidth), int32(winHeight))
 	if err != nil {
@@ -190,7 +209,6 @@ func main() {
 	cloudPixels := rescaleAndDraw(cloudNoise, min, max, cloudGradient, winWidth, winHeight)
 	cloudTexture := pixelsToTexture(renderer, cloudPixels, winWidth, winHeight)
 
-	pixels := make([]byte, winWidth*winHeight*4)
 	balloons := loadBalloons(renderer)
 
 	dir := 1
@@ -207,21 +225,20 @@ func main() {
 		renderer.Copy(cloudTexture, nil, nil)
 
 		for _, balloon := range balloons {
-			balloon.draw()
+			balloon.draw(renderer)
 		}
 		balloons[1].x += float32(dir * 2)
 		if balloons[1].x > 400 || balloons[1].x < 0 {
 			dir *= -1
 		}
-		tex.Update(nil, pixels, winWidth*4)
-		renderer.Copy(tex, nil, nil)
+
 		renderer.Present()
 		elapsedTime := float32(time.Since(frameStart).Milliseconds())
 		fmt.Println(elapsedTime, "ms/frame")
 
 		if elapsedTime < 5 {
 			sdl.Delay(5 - uint32(elapsedTime))
-			elapsedTime = float32(time.Since(frameStart).Milliseconds())
+			// elapsedTime = float32(time.Since(frameStart).Milliseconds())
 		}
 	}
 }
