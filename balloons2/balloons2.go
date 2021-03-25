@@ -44,10 +44,15 @@ func getMouseState() mouseState {
 }
 
 type balloon struct {
-	tex  *sdl.Texture
-	pos  Vector3
-	dir  Vector3
-	w, h int
+	tex               *sdl.Texture
+	pos               Vector3
+	dir               Vector3
+	w, h              int
+	exploding         bool
+	exploded          bool
+	explosionStart    time.Time
+	explosionInterval float32
+	explosionTexture  *sdl.Texture
 }
 
 type balloonArray []*balloon
@@ -90,6 +95,7 @@ func (balloon *balloon) update(elapsedTime float32,
 		yDiff := float32(mouseY) - y
 		dist := float32(math.Sqrt(float64(xDiff*xDiff + yDiff*yDiff)))
 		if dist < r {
+			sdl.ClearQueuedAudio(audioState.deviceID)
 			sdl.QueueAudio(audioState.deviceID, audioState.explosionBytes)
 			sdl.PauseAudioDevice(audioState.deviceID, false)
 		}
@@ -122,6 +128,10 @@ func (balloon *balloon) draw(renderer *sdl.Renderer) {
 	rect := &sdl.Rect{X: x, Y: y, W: newW, H: newH}
 
 	renderer.Copy(balloon.tex, nil, rect)
+
+	if balloon.exploding {
+
+	}
 }
 
 type rgba struct {
@@ -303,7 +313,6 @@ func main() {
 	}
 	defer renderer.Destroy()
 
-	// var audioSpec sdl.AudioSpec
 	explosionBytes, audioSpec := sdl.LoadWAV("explode.wav")
 	audioID, err := sdl.OpenAudioDevice("", false, audioSpec, nil, 0)
 	if err != nil {
