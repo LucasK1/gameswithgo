@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image/png"
+	"math"
 	"math/rand"
 	"os"
 	"sort"
@@ -14,6 +15,12 @@ import (
 )
 
 const winWidth, winHeight, winDepth int = 800, 600, 100
+
+type audioState struct {
+	explosionBytes []byte
+	deviceID       sdl.AudioDeviceID
+	audioSpec      *sdl.AudioSpec
+}
 
 type mouseState struct {
 	leftButton  bool
@@ -58,7 +65,36 @@ func (balloons balloonArray) Less(i, j int) bool {
 	return diff < -0.5
 }
 
-func (balloon *balloon) update(elapsedTime float32) {
+func (balloon *balloon) getScale() float32 {
+	return (balloon.pos.Z/200 + 1) / 2
+}
+
+func (balloon *balloon) getCircle() (x, y, r float32) {
+	x = balloon.pos.X
+	y = balloon.pos.Y - 30*balloon.getScale()
+	r = float32(balloon.w) / 2 * balloon.getScale()
+
+	return x, y, r
+}
+
+func (balloon *balloon) update(elapsedTime float32,
+	currentMouseState,
+	prevMouseState mouseState,
+	audioState *audioState) {
+
+	if !prevMouseState.leftButton && currentMouseState.leftButton {
+		x, y, r := balloon.getCircle()
+		mouseX := currentMouseState.x
+		mouseY := currentMouseState.y
+		xDiff := float32(mouseX) - x
+		yDiff := float32(mouseY) - y
+		dist := float32(math.Sqrt(float64(xDiff*xDiff + yDiff*yDiff)))
+		if dist < r {
+			sdl.QueueAudio(audioState.deviceID, audioState.explosionBytes)
+			sdl.PauseAudioDevice(audioState.deviceID, false)
+		}
+	}
+
 	p := Add(balloon.pos, Multiply(balloon.dir, elapsedTime))
 
 	if p.X < 0 || p.X > float32(winWidth) {
@@ -76,7 +112,7 @@ func (balloon *balloon) update(elapsedTime float32) {
 }
 
 func (balloon *balloon) draw(renderer *sdl.Renderer) {
-	scale := (balloon.pos.Z/200 + 1) / 2
+	scale := balloon.getScale()
 
 	newW := int32(float32(balloon.w) * scale)
 	newH := int32(float32(balloon.h) * scale)
@@ -167,7 +203,7 @@ func loadBalloons(renderer *sdl.Renderer, numBalloons int) []*balloon {
 
 		pos := Vector3{X: rand.Float32() * float32(winWidth), Y: rand.Float32() * float32(winHeight), Z: rand.Float32() * float32(winDepth)}
 
-		dir := Vector3{X: rand.Float32() * 0.5, Y: rand.Float32() * 0.5, Z: rand.Float32() * 0.5}
+		dir := Vector3{X: rand.Float32()*0.5 - 0.25, Y: rand.Float32()*0.5 - 0.25, Z: rand.Float32()*0.25 - 0.25/2}
 
 		_, _, w, h, err := tex.Query()
 		if err != nil {
@@ -251,7 +287,7 @@ func main() {
 	}
 	defer sdl.Quit()
 
-	window, err := sdl.CreateWindow("Test", sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED, int32(winWidth), int32(winHeight), sdl.WINDOW_SHOWN)
+	window, err := sdl.CreateWindow("Exploding balloons", 200, 200, int32(winWidth), int32(winHeight), sdl.WINDOW_SHOWN)
 
 	if err != nil {
 		fmt.Println(err)
@@ -266,6 +302,17 @@ func main() {
 		return
 	}
 	defer renderer.Destroy()
+
+	// var audioSpec sdl.AudioSpec
+	explosionBytes, audioSpec := sdl.LoadWAV("explode.wav")
+	audioID, err := sdl.OpenAudioDevice("", false, audioSpec, nil, 0)
+	if err != nil {
+		panic(err)
+	}
+	defer sdl.FreeWAV(explosionBytes)
+
+	audioState := audioState{explosionBytes, audioID, audioSpec}
+
 	sdl.SetHint(sdl.HINT_RENDER_SCALE_QUALITY, "1")
 
 	cloudNoise, min, max := noise.MakeNoise(noise.FBM, .009, .5, 3, 3, winWidth, winHeight)
@@ -282,23 +329,27 @@ func main() {
 	for {
 		frameStart := time.Now()
 
+		currentMouseState := getMouseState()
+
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-			switch event.(type) {
+			switch e := event.(type) {
 			case *sdl.QuitEvent:
 				return
+			case *sdl.TouchFingerEvent:
+				if e.Type == sdl.FINGERDOWN {
+					touchX := e.X * float32(winWidth)
+					touchY := e.Y * float32(winHeight)
+					currentMouseState.x = int(touchX)
+					currentMouseState.y = int(touchY)
+					currentMouseState.leftButton = true
+				}
 			}
-		}
-
-		currentMouseState = getMouseState()
-
-		if !currentMouseState.leftButton && prevMouseState.leftButton {
-			fmt.Println("Left click")
 		}
 
 		renderer.Copy(cloudTexture, nil, nil)
 
 		for _, balloon := range balloons {
-			balloon.update(elapsedTime)
+			balloon.update(elapsedTime, currentMouseState, prevMouseState, &audioState)
 		}
 
 		sort.Sort(balloonArray(balloons))
