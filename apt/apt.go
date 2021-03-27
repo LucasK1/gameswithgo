@@ -36,7 +36,8 @@ func GetNthNode(node Node, n, count int) (Node, int) {
 			return result, count
 		}
 	}
-	panic("Tried to get a node that doesn't exist")
+	return nil, count
+	// panic("Tried to get a node that doesn't exist")
 }
 
 func Mutate(node Node) Node {
