@@ -6,6 +6,7 @@ import (
 	"time"
 
 	. "github.com/LucasK1/gameswithgo/apt"
+	. "github.com/LucasK1/gameswithgo/evolvingpictures/gui"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
@@ -22,10 +23,6 @@ type pixelResult struct {
 // 	explosionBytes []byte
 // 	deviceID       sdl.AudioDeviceID
 // 	audioSpec      *sdl.AudioSpec
-// }
-
-// type rgba struct {
-// 	r, g, b byte
 // }
 
 type picture struct {
@@ -182,8 +179,8 @@ func main() {
 	picHeight := int(float32(winHeight/rows) * float32(.9))
 
 	pixelsChannel := make(chan pixelResult, numPics)
-	textures := make([]*sdl.Texture, numPics)
-	for i := range textures {
+	buttons := make([]*ImageButton, numPics)
+	for i := range picTrees {
 		go func(i int) {
 			pixels := aptToPixels(picTrees[i], picWidth, picHeight, renderer)
 			pixelsChannel <- pixelResult{pixels, i}
@@ -191,12 +188,15 @@ func main() {
 	}
 
 	keyboardState := sdl.GetKeyboardState()
+	mouseState := GetMouseState()
 
 	for {
 		frameStart := time.Now()
 
+		mouseState.Update()
+
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-			switch e := event.(type) {
+			switch event.(type) {
 			case *sdl.QuitEvent:
 				return
 			}
@@ -210,18 +210,8 @@ func main() {
 		case pixelsAndIndex, ok := <-pixelsChannel:
 			if ok {
 				tex := pixelsToTexture(renderer, pixelsAndIndex.pixels, picWidth, picHeight)
-				textures[pixelsAndIndex.index] = tex
-
-			}
-		default:
-
-		}
-
-		renderer.Clear()
-		for i, tex := range textures {
-			if tex != nil {
-				xi := i % cols
-				yi := (i - xi) / cols
+				xi := pixelsAndIndex.index % cols
+				yi := (pixelsAndIndex.index - xi) / cols
 
 				x := int32(xi * picWidth)
 				y := int32(yi * picHeight)
@@ -231,9 +221,23 @@ func main() {
 				x += xPad * (int32(xi) + 1)
 				y += yPad * (int32(yi) + 1)
 
-				rect := &sdl.Rect{X: x, Y: y, W: int32(picWidth), H: int32(picHeight)}
+				rect := sdl.Rect{X: x, Y: y, W: int32(picWidth), H: int32(picHeight)}
+				button := NewImageButton(renderer, tex, rect, sdl.Color{R: 255, G: 255, B: 255, A: 0})
+				buttons[pixelsAndIndex.index] = button
 
-				renderer.Copy(tex, nil, rect)
+			}
+		default:
+
+		}
+
+		renderer.Clear()
+		for _, button := range buttons {
+			if button != nil {
+				button.Update(mouseState)
+				if button.WasLeftClicked {
+					button.IsSelected = !button.IsSelected
+				}
+				button.Draw(renderer)
 			}
 		}
 
