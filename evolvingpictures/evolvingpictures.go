@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"time"
 
 	. "github.com/LucasK1/gameswithgo/apt"
@@ -119,25 +120,52 @@ func main() {
 	// currentMouseState := getMouseState()
 	// prevMouseState := currentMouseState
 
-	x := &OpX{}
-	y := &OpY{}
-	sine := &OpSin{}
-	noise := &OpNoise{}
-	mult := &OpMult{}
-	plus := &OpPlus{}
+	rand.Seed(time.Now().UTC().UnixNano())
 
-	mult.LeftChild = x
-	mult.RightChild = noise
+	aptR := GetRandomNode()
+	aptG := GetRandomNode()
+	aptB := GetRandomNode()
 
-	noise.LeftChild = x
-	noise.RightChild = y
+	num := rand.Intn(20)
+	for i := 0; i < num; i++ {
+		aptR.AddRandom(GetRandomNode())
+	}
+	num = rand.Intn(20)
+	for i := 0; i < num; i++ {
+		aptG.AddRandom(GetRandomNode())
+	}
+	num = rand.Intn(20)
+	for i := 0; i < num; i++ {
+		aptB.AddRandom(GetRandomNode())
+	}
 
-	sine.Child = mult
-	plus.LeftChild = y
-	plus.RightChild = sine
+	for {
+		_, nilCount := aptR.NodeCount()
+		if nilCount == 0 {
+			break
+		}
+		aptR.AddRandom(GetRandomLeaf())
+	}
+	for {
+		_, nilCount := aptG.NodeCount()
+		if nilCount == 0 {
+			break
+		}
+		aptG.AddRandom(GetRandomLeaf())
+	}
+	for {
+		_, nilCount := aptB.NodeCount()
+		if nilCount == 0 {
+			break
+		}
+		aptB.AddRandom(GetRandomLeaf())
+	}
 
-	// fmt.Println(noise.String())
-	texture := aptToTexture(plus, mult, sine, 800, 600, renderer)
+	texture := aptToTexture(aptR, aptB, aptG, 800, 600, renderer)
+
+	fmt.Println("R:", aptR.String())
+	fmt.Println("G:", aptG.String())
+	fmt.Println("B:", aptB.String())
 
 	for {
 		frameStart := time.Now()
