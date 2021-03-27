@@ -11,13 +11,123 @@ import (
 type Node interface {
 	Eval(x, y float32) float32
 	String() string
+	SetParent(parent Node)
+	GetParent() Node
+	GetChildren() []Node
 	AddRandom(node Node)
-	NodeCount() (nodeCount, nilCount int)
+	AddLeaf(leaf Node) bool
+	NodeCount() int
 }
 
 type BaseNode struct {
 	Parent   Node
 	Children []Node
+}
+
+func GetNthNode(node Node, n, count int) (Node, int) {
+	if n == count {
+		return node, count
+	}
+	var result Node
+	for _, child := range node.GetChildren() {
+		count++
+		result, count = GetNthNode(child, n, count)
+		if result != nil {
+			return result, count
+		}
+	}
+	panic("Tried to get a node that doesn't exist")
+}
+
+func Mutate(node Node) Node {
+	r := rand.Intn(23)
+	var mutatedNode Node
+
+	if r <= 19 {
+		mutatedNode = GetRandomNode()
+	} else {
+		mutatedNode = GetRandomLeaf()
+	}
+
+	// Fix up parent's child pointer to point to the new node
+	if node.GetParent() != nil {
+		for i, parentChild := range node.GetParent().GetChildren() {
+			if parentChild == node {
+				node.GetParent().GetChildren()[i] = mutatedNode
+			}
+		}
+	}
+
+	// Add children from the old node to the new mutated node
+	for i, child := range node.GetChildren() {
+		if i >= len(mutatedNode.GetChildren()) {
+			break
+		}
+		mutatedNode.GetChildren()[i] = child
+		child.SetParent(mutatedNode)
+	}
+
+	// Any nil children get filled in with a random leaf
+	for i, child := range mutatedNode.GetChildren() {
+		if child == nil {
+			leaf := GetRandomLeaf()
+			leaf.SetParent(mutatedNode)
+			mutatedNode.GetChildren()[i] = leaf
+		}
+	}
+	mutatedNode.SetParent(node.GetParent())
+	return mutatedNode
+}
+
+func (node *BaseNode) Eval(x, y float32) float32 {
+	panic("Tried to call eval on basenode")
+}
+
+func (node *BaseNode) String() string {
+	panic("Tried to call String on basenode")
+}
+
+func (node *BaseNode) SetParent(parent Node) {
+	node.Parent = parent
+}
+
+func (node *BaseNode) GetParent() Node {
+	return node.Parent
+}
+
+func (node *BaseNode) GetChildren() []Node {
+	return node.Children
+}
+
+func (node *BaseNode) AddRandom(nodeToAdd Node) {
+	addIndex := rand.Intn(len(node.Children))
+	if node.Children[addIndex] == nil {
+		nodeToAdd.SetParent(node)
+		node.Children[addIndex] = nodeToAdd
+	} else {
+		node.Children[addIndex].AddRandom(nodeToAdd)
+	}
+}
+
+func (node *BaseNode) AddLeaf(leaf Node) bool {
+	for i, child := range node.Children {
+		if child == nil {
+			leaf.SetParent(node)
+			node.Children[i] = leaf
+			return true
+		} else if node.Children[i].AddLeaf(leaf) {
+			return true
+		}
+	}
+	return false
+}
+
+func (node *BaseNode) NodeCount() int {
+	count := 1
+	for _, child := range node.Children {
+		count += child.NodeCount()
+	}
+	return count
 }
 
 type OpSin struct {
