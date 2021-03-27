@@ -9,34 +9,20 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-const winWidth, winHeight int = 800, 600
+var winWidth, winHeight int = 800, 600
+
+var rows, cols, numPics int = 3, 3, rows * cols
+
+type pixelResult struct {
+	pixels []byte
+	index  int
+}
 
 // type audioState struct {
 // 	explosionBytes []byte
 // 	deviceID       sdl.AudioDeviceID
 // 	audioSpec      *sdl.AudioSpec
 // }
-
-type mouseState struct {
-	leftButton  bool
-	rightButton bool
-	x, y        int
-}
-
-func getMouseState() mouseState {
-	mouseX, mouseY, mouseButtonState := sdl.GetMouseState()
-
-	leftButton := mouseButtonState & sdl.ButtonLMask()
-	rightButton := mouseButtonState & sdl.ButtonRMask()
-
-	var result mouseState
-	result.x = int(mouseX)
-	result.y = int(mouseY)
-	result.leftButton = !(leftButton == 0)
-	result.rightButton = !(rightButton == 0)
-
-	return result
-}
 
 // type rgba struct {
 // 	r, g, b byte
@@ -59,15 +45,15 @@ func NewPicture() *picture {
 	p.g = GetRandomNode()
 	p.b = GetRandomNode()
 
-	num := rand.Intn(4)
+	num := rand.Intn(20) + 5
 	for i := 0; i < num; i++ {
 		p.r.AddRandom(GetRandomNode())
 	}
-	num = rand.Intn(4)
+	num = rand.Intn(20) + 5
 	for i := 0; i < num; i++ {
 		p.g.AddRandom(GetRandomNode())
 	}
-	num = rand.Intn(4)
+	num = rand.Intn(20) + 5
 	for i := 0; i < num; i++ {
 		p.b.AddRandom(GetRandomNode())
 	}
@@ -120,7 +106,7 @@ func pixelsToTexture(renderer *sdl.Renderer, pixels []byte, w, h int) *sdl.Textu
 	return tex
 }
 
-func aptToTexture(p *picture, w, h int, renderer *sdl.Renderer) *sdl.Texture {
+func aptToPixels(p *picture, w, h int, renderer *sdl.Renderer) []byte {
 	scale := float32(255 / 2)
 	offset := float32(-1 * scale)
 	pixels := make([]byte, w*h*4)
@@ -144,7 +130,7 @@ func aptToTexture(p *picture, w, h int, renderer *sdl.Renderer) *sdl.Texture {
 			pixelIndex++
 		}
 	}
-	return pixelsToTexture(renderer, pixels, w, h)
+	return pixels
 }
 
 func main() {
@@ -185,41 +171,71 @@ func main() {
 
 	var elapsedTime float32
 
-	currentMouseState := getMouseState()
-	prevMouseState := currentMouseState
-
 	rand.Seed(time.Now().UTC().UnixNano())
 
-	pic := NewPicture()
+	picTrees := make([]*picture, numPics)
+	for i := range picTrees {
+		picTrees[i] = NewPicture()
+	}
 
-	texture := aptToTexture(pic, winWidth, winHeight, renderer)
+	picWidth := int(float32(winWidth/cols) * float32(.9))
+	picHeight := int(float32(winHeight/rows) * float32(.9))
+
+	pixelsChannel := make(chan pixelResult, numPics)
+	textures := make([]*sdl.Texture, numPics)
+	for i := range textures {
+		go func(i int) {
+			pixels := aptToPixels(picTrees[i], picWidth, picHeight, renderer)
+			pixelsChannel <- pixelResult{pixels, i}
+		}(i)
+	}
+
+	keyboardState := sdl.GetKeyboardState()
 
 	for {
 		frameStart := time.Now()
-
-		currentMouseState := getMouseState()
 
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 			switch e := event.(type) {
 			case *sdl.QuitEvent:
 				return
-			case *sdl.TouchFingerEvent:
-				if e.Type == sdl.FINGERDOWN {
-					touchX := e.X * float32(winWidth)
-					touchY := e.Y * float32(winHeight)
-					currentMouseState.x = int(touchX)
-					currentMouseState.y = int(touchY)
-					currentMouseState.leftButton = true
-				}
 			}
 		}
 
-		if prevMouseState.leftButton && !currentMouseState.leftButton {
-			pic.Mutate()
-			texture = aptToTexture(pic, winWidth, winHeight, renderer)
+		if keyboardState[sdl.SCANCODE_ESCAPE] != 0 {
+			return
 		}
 
-		renderer.Copy(texture, nil, nil)
+		select {
+		case pixelsAndIndex, ok := <-pixelsChannel:
+			if ok {
+				tex := pixelsToTexture(renderer, pixelsAndIndex.pixels, picWidth, picHeight)
+				textures[pixelsAndIndex.index] = tex
+
+			}
+		default:
+
+		}
+
+		renderer.Clear()
+		for i, tex := range textures {
+			if tex != nil {
+				xi := i % cols
+				yi := (i - xi) / cols
+
+				x := int32(xi * picWidth)
+				y := int32(yi * picHeight)
+				xPad := int32(float32(winWidth) * 0.1 / float32(cols+1))
+				yPad := int32(float32(winHeight) * 0.1 / float32(rows+1))
+
+				x += xPad * (int32(xi) + 1)
+				y += yPad * (int32(yi) + 1)
+
+				rect := &sdl.Rect{X: x, Y: y, W: int32(picWidth), H: int32(picHeight)}
+
+				renderer.Copy(tex, nil, rect)
+			}
+		}
 
 		renderer.Present()
 		elapsedTime = float32(time.Since(frameStart).Milliseconds())
@@ -228,7 +244,5 @@ func main() {
 			sdl.Delay(5 - uint32(elapsedTime))
 			// elapsedTime = float32(time.Since(frameStart).Milliseconds())
 		}
-
-		prevMouseState = currentMouseState
 	}
 }
