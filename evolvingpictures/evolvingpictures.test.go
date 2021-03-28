@@ -111,6 +111,14 @@ func evolve(survivors []*picture) []*picture {
 		newPics[i] = cross(a, b)
 		i++
 	}
+
+	for _, pic := range newPics {
+		r := rand.Intn(4)
+		for i := 0; i < r; i++ {
+			pic.mutate()
+		}
+	}
+
 	return newPics
 }
 
