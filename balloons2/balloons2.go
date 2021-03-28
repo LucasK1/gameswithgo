@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/LucasK1/gameswithgo/noise"
-	. "github.com/LucasK1/gameswithgo/vec3"
+	"github.com/LucasK1/gameswithgo/vec3"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
@@ -45,8 +45,8 @@ func getMouseState() mouseState {
 
 type balloon struct {
 	tex               *sdl.Texture
-	pos               Vector3
-	dir               Vector3
+	pos               vec3.Vector3
+	dir               vec3.Vector3
 	w, h              int
 	exploding         bool
 	exploded          bool
@@ -55,7 +55,7 @@ type balloon struct {
 	explosionTexture  *sdl.Texture
 }
 
-func newBalloon(tex *sdl.Texture, pos, dir Vector3, explosionTexture *sdl.Texture) *balloon {
+func newBalloon(tex *sdl.Texture, pos, dir vec3.Vector3, explosionTexture *sdl.Texture) *balloon {
 	_, _, w, h, err := tex.Query()
 	if err != nil {
 		panic(err)
@@ -135,7 +135,7 @@ func updateBalloons(
 			}
 		}
 
-		p := Add(balloon.pos, Multiply(balloon.dir, elapsedTime))
+		p := vec3.Add(balloon.pos, vec3.Multiply(balloon.dir, elapsedTime))
 
 		if p.X < 0 || p.X > float32(winWidth) {
 			balloon.dir.X = -balloon.dir.X
@@ -147,7 +147,7 @@ func updateBalloons(
 			balloon.dir.Z = -balloon.dir.Z
 		}
 
-		balloon.pos = Add(balloon.pos, Multiply(balloon.dir, elapsedTime))
+		balloon.pos = vec3.Add(balloon.pos, vec3.Multiply(balloon.dir, elapsedTime))
 	}
 
 	if balloonExploded {
@@ -265,9 +265,9 @@ func loadBalloons(renderer *sdl.Renderer, numBalloons int) []*balloon {
 	for i := range balloons {
 		tex := balloonTextures[i%3]
 
-		pos := Vector3{X: rand.Float32() * float32(winWidth), Y: rand.Float32() * float32(winHeight), Z: rand.Float32() * float32(winDepth)}
+		pos := vec3.Vector3{X: rand.Float32() * float32(winWidth), Y: rand.Float32() * float32(winHeight), Z: rand.Float32() * float32(winDepth)}
 
-		dir := Vector3{X: rand.Float32()*0.5 - 0.25, Y: rand.Float32()*0.5 - 0.25, Z: rand.Float32()*0.25 - 0.25/2}
+		dir := vec3.Vector3{X: rand.Float32()*0.5 - 0.25, Y: rand.Float32()*0.5 - 0.25, Z: rand.Float32()*0.25 - 0.25/2}
 
 		balloons[i] = newBalloon(tex, pos, dir, explosionTexture)
 	}
