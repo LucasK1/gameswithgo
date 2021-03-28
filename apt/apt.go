@@ -3,6 +3,7 @@ package apt
 import (
 	"math"
 	"math/rand"
+	"reflect"
 	"strconv"
 
 	"github.com/LucasK1/gameswithgo/noise"
@@ -13,6 +14,7 @@ type Node interface {
 	String() string
 	SetParent(parent Node)
 	GetParent() Node
+	SetChildren([]Node)
 	GetChildren() []Node
 	AddRandom(node Node)
 	AddLeaf(leaf Node) bool
@@ -22,6 +24,30 @@ type Node interface {
 type BaseNode struct {
 	Parent   Node
 	Children []Node
+}
+
+func CopyTree(node Node, parent Node) Node {
+	copy := reflect.New(reflect.ValueOf(node).Elem().Type()).Interface().(Node)
+
+	copy.SetParent(parent)
+	copyChildren := make([]Node, len(node.GetChildren()))
+	copy.SetChildren(copyChildren)
+	for i := range copyChildren {
+		copyChildren[i] = CopyTree(node.GetChildren()[i], copy)
+	}
+	return copy
+}
+
+func ReplaceNode(old Node, new Node) {
+	oldParent := old.GetParent()
+	if oldParent != nil {
+		for i, child := range oldParent.GetChildren() {
+			if child == old {
+				oldParent.GetChildren()[i] = new
+			}
+		}
+	}
+	new.SetParent(oldParent)
 }
 
 func GetNthNode(node Node, n, count int) (Node, int) {
@@ -37,7 +63,6 @@ func GetNthNode(node Node, n, count int) (Node, int) {
 		}
 	}
 	return nil, count
-	// panic("Tried to get a node that doesn't exist")
 }
 
 func Mutate(node Node) Node {
@@ -94,6 +119,10 @@ func (node *BaseNode) SetParent(parent Node) {
 
 func (node *BaseNode) GetParent() Node {
 	return node.Parent
+}
+
+func (node *BaseNode) SetChildren(children []Node) {
+	node.Children = children
 }
 
 func (node *BaseNode) GetChildren() []Node {
