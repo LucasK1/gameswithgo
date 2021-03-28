@@ -5,8 +5,8 @@ import (
 	"math/rand"
 	"time"
 
-	. "github.com/LucasK1/gameswithgo/apt"
-	. "github.com/LucasK1/gameswithgo/evolvingpictures/gui"
+	"github.com/LucasK1/gameswithgo/apt"
+	"github.com/LucasK1/gameswithgo/evolvingpictures/gui"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
@@ -26,46 +26,46 @@ type pixelResult struct {
 // }
 
 type picture struct {
-	r Node
-	g Node
-	b Node
+	r apt.Node
+	g apt.Node
+	b apt.Node
 }
 
 func (p *picture) String() string {
 	return "R" + p.r.String() + "\n" + "G" + p.g.String() + "\n" + "B" + p.b.String()
 }
 
-func NewPicture() *picture {
+func newPicture() *picture {
 	p := &picture{}
 
-	p.r = GetRandomNode()
-	p.g = GetRandomNode()
-	p.b = GetRandomNode()
+	p.r = apt.GetRandomNode()
+	p.g = apt.GetRandomNode()
+	p.b = apt.GetRandomNode()
 
 	num := rand.Intn(20) + 5
 	for i := 0; i < num; i++ {
-		p.r.AddRandom(GetRandomNode())
+		p.r.AddRandom(apt.GetRandomNode())
 	}
 	num = rand.Intn(20) + 5
 	for i := 0; i < num; i++ {
-		p.g.AddRandom(GetRandomNode())
+		p.g.AddRandom(apt.GetRandomNode())
 	}
 	num = rand.Intn(20) + 5
 	for i := 0; i < num; i++ {
-		p.b.AddRandom(GetRandomNode())
+		p.b.AddRandom(apt.GetRandomNode())
 	}
 
-	for p.r.AddLeaf(GetRandomLeaf()) {
+	for p.r.AddLeaf(apt.GetRandomLeaf()) {
 	}
-	for p.g.AddLeaf(GetRandomLeaf()) {
+	for p.g.AddLeaf(apt.GetRandomLeaf()) {
 	}
-	for p.b.AddLeaf(GetRandomLeaf()) {
+	for p.b.AddLeaf(apt.GetRandomLeaf()) {
 	}
 
 	return p
 }
 
-func (p *picture) pickRandomColor() Node {
+func (p *picture) pickRandomColor() apt.Node {
 	r := rand.Intn(3)
 	switch r {
 	case 0:
@@ -81,18 +81,18 @@ func (p *picture) pickRandomColor() Node {
 }
 
 func cross(a *picture, b *picture) *picture {
-	aCopy := &picture{CopyTree(a.r, nil), CopyTree(a.g, nil), CopyTree(a.b, nil)}
+	aCopy := &picture{apt.CopyTree(a.r, nil), apt.CopyTree(a.g, nil), apt.CopyTree(a.b, nil)}
 	aColor := aCopy.pickRandomColor()
 	bColor := b.pickRandomColor()
 
 	aIndex := rand.Intn(aColor.NodeCount())
-	aNode, _ := GetNthNode(aColor, aIndex, 0)
+	aNode, _ := apt.GetNthNode(aColor, aIndex, 0)
 
 	bIndex := rand.Intn(bColor.NodeCount())
-	bNode, _ := GetNthNode(bColor, bIndex, 0)
-	bNodeCopy := CopyTree(bNode, bNode.GetParent())
+	bNode, _ := apt.GetNthNode(bColor, bIndex, 0)
+	bNodeCopy := apt.CopyTree(bNode, bNode.GetParent())
 
-	ReplaceNode(aNode, bNodeCopy)
+	apt.ReplaceNode(aNode, bNodeCopy)
 	return aCopy
 }
 
@@ -124,7 +124,7 @@ func evolve(survivors []*picture) []*picture {
 
 func (p *picture) mutate() {
 	r := rand.Intn(3)
-	var nodeToMutate Node
+	var nodeToMutate apt.Node
 	switch r {
 	case 0:
 		nodeToMutate = p.r
@@ -138,9 +138,9 @@ func (p *picture) mutate() {
 
 	r = rand.Intn(count)
 
-	nodeToMutate, _ = GetNthNode(nodeToMutate, r, 0)
+	nodeToMutate, _ = apt.GetNthNode(nodeToMutate, r, 0)
 
-	mutation := Mutate(nodeToMutate)
+	mutation := apt.Mutate(nodeToMutate)
 	if nodeToMutate == p.r {
 		p.r = mutation
 	} else if nodeToMutate == p.g {
@@ -229,19 +229,19 @@ func main() {
 
 	picTrees := make([]*picture, numPics)
 	for i := range picTrees {
-		picTrees[i] = NewPicture()
+		picTrees[i] = newPicture()
 	}
 
 	picWidth := int(float32(winWidth/cols) * float32(0.9))
 	picHeight := int(float32(winHeight/rows) * float32(0.8))
 
 	pixelsChannel := make(chan pixelResult, numPics)
-	buttons := make([]*ImageButton, numPics)
+	buttons := make([]*gui.ImageButton, numPics)
 
-	eveolveButtonTex := GetSinglePixel(renderer, sdl.Color{R: 255, G: 255, B: 255, A: 0})
+	eveolveButtonTex := gui.GetSinglePixel(renderer, sdl.Color{R: 255, G: 255, B: 255, A: 0})
 	evolveRect := sdl.Rect{X: int32(float32(winWidth)/2 - float32(picWidth)/2), Y: int32(float32(winHeight) - (float32(winHeight) * 0.10)), W: int32(picWidth), H: int32(float32(winHeight) * 0.08)}
 
-	evolveButton := NewImageButton(renderer, eveolveButtonTex, evolveRect, sdl.Color{R: 255, G: 255, B: 255, A: 0})
+	evolveButton := gui.NewImageButton(renderer, eveolveButtonTex, evolveRect, sdl.Color{R: 255, G: 255, B: 255, A: 0})
 
 	for i := range picTrees {
 		go func(i int) {
@@ -251,7 +251,7 @@ func main() {
 	}
 
 	keyboardState := sdl.GetKeyboardState()
-	mouseState := GetMouseState()
+	mouseState := gui.GetMouseState()
 
 	for {
 		frameStart := time.Now()
@@ -285,7 +285,7 @@ func main() {
 				y += yPad * (int32(yi) + 1)
 
 				rect := sdl.Rect{X: x, Y: y, W: int32(picWidth), H: int32(picHeight)}
-				button := NewImageButton(renderer, tex, rect, sdl.Color{R: 255, G: 255, B: 255, A: 0})
+				button := gui.NewImageButton(renderer, tex, rect, sdl.Color{R: 255, G: 255, B: 255, A: 0})
 				buttons[pixelsAndIndex.index] = button
 
 			}
