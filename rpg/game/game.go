@@ -196,7 +196,7 @@ func handleInput(ui GameUI, level *Level, input *Input) {
 			checkDoor(level, Pos{p.X + 1, p.Y})
 		}
 	case Search:
-		bfs(ui, level, level.Player.Pos)
+		astar(ui, level, level.Player.Pos, Pos{X: 3, Y: 3})
 	}
 }
 
@@ -248,22 +248,41 @@ func bfs(ui GameUI, level *Level, start Pos) {
 
 }
 
-func astar(ui GameUI, level *Level, start Pos, goal Pos) {
+func astar(ui GameUI, level *Level, start Pos, goal Pos) []Pos {
 	frontier := make(priorityArray, 0, 8)
 	frontier = append(frontier, priorityPos{start, 1})
 
 	cameFrom := make(map[Pos]Pos)
-	cameForm[start] = start
+	cameFrom[start] = start
 
 	costSoFar := make(map[Pos]int)
 	costSoFar[start] = 0
+
+	level.Debug = make(map[Pos]bool)
 
 	for len(frontier) > 0 {
 		sort.Stable(frontier)
 		current := frontier[0]
 
 		if current.Pos == goal {
-			break
+			path := make([]Pos, 0)
+			p := current.Pos
+			for p != start {
+				path = append(path, p)
+				p = cameFrom[p]
+			}
+			path = append(path, p)
+			level.Debug[p] = true
+
+			for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
+				path[i], path[j] = path[j], path[i]
+			}
+			for _, pos := range path {
+				level.Debug[pos] = true
+				ui.Draw(level)
+				time.Sleep(100 * time.Millisecond)
+			}
+			return path
 		}
 
 		frontier = frontier[1:]
@@ -272,12 +291,16 @@ func astar(ui GameUI, level *Level, start Pos, goal Pos) {
 			newCost := costSoFar[current.Pos] + 1
 			_, exists := costSoFar[next]
 			if !exists || newCost < costSoFar[next] {
+				costSoFar[next] = newCost
+				xDist := int(math.Abs(float64(goal.X - next.X)))
+				yDist := int(math.Abs(float64(goal.Y - next.Y)))
+				priority := newCost + xDist + yDist
+				frontier = append(frontier, priorityPos{next, priority})
+				cameFrom[next] = current.Pos
 			}
-			costSoFar[next] = newCost
-			xDist := int(math.Abs(float64(goal.X - next.X)))
-			yDist := int(math.Abs(float64(goal.Y - next.Y)))
 		}
 	}
+	return nil
 }
 
 func Run(ui GameUI) {
