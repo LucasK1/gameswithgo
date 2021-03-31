@@ -13,19 +13,23 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-const winWidth, winHeight = 1280, 720
+type ui struct {
+	winWidth          int
+	winHeight         int
+	renderer          *sdl.Renderer
+	window            *sdl.Window
+	textureAtlas      *sdl.Texture
+	textureIndex      map[game.Tile][]sdl.Rect
+	keyboardState     []uint8
+	prevKeyboardState []uint8
+	centerX           int
+	centerY           int
+	levelChannel      chan *game.Level
+	inputChan             chan *game.Input
+}
 
-var renderer *sdl.Renderer
-var textureAtlas *sdl.Texture
-var textureIndex map[game.Tile][]sdl.Rect
-var keyboardState []uint8
-var prevKeyboardState []uint8
-
-var centerX int
-var centerY int
-
-func loadTextureIndex() {
-	textureIndex = make(map[game.Tile][]sdl.Rect)
+func (ui *ui) loadTextureIndex() {
+	ui.textureIndex = make(map[game.Tile][]sdl.Rect)
 
 	infile, err := os.Open("ui2d/assets/atlas-index.txt")
 	if err != nil {
@@ -63,11 +67,11 @@ func loadTextureIndex() {
 				y++
 			}
 		}
-		textureIndex[tileRune] = rects
+		ui.textureIndex[tileRune] = rects
 	}
 }
 
-func imgFileToTexture(filename string) *sdl.Texture {
+func (ui *ui) imgFileToTexture(filename string) *sdl.Texture {
 	infile, err := os.Open(filename)
 	if err != nil {
 		panic(err)
@@ -100,7 +104,7 @@ func imgFileToTexture(filename string) *sdl.Texture {
 		}
 	}
 
-	tex, err := renderer.CreateTexture(sdl.PIXELFORMAT_ABGR8888, sdl.TEXTUREACCESS_STATIC, int32(w), int32(h))
+	tex, err := ui.renderer.CreateTexture(sdl.PIXELFORMAT_ABGR8888, sdl.TEXTUREACCESS_STATIC, int32(w), int32(h))
 	if err != nil {
 		panic(err)
 	}
@@ -115,126 +119,134 @@ func imgFileToTexture(filename string) *sdl.Texture {
 }
 
 func init() {
-	sdl.LogSetAllPriority(sdl.LOG_PRIORITY_VERBOSE)
 	err := sdl.Init(sdl.INIT_EVERYTHING)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	window, err := sdl.CreateWindow("RPG", 200, 200, int32(winWidth), int32(winHeight), sdl.WINDOW_SHOWN)
+}
+func NewUI(inputChan chan *game.Input, levelChan chan *game.Level) *ui {
+
+	ui := &ui()
+	ui.inputChan = inputChan
+	ui.levelChan = levelChan
+
+	window, err := sdl.CreateWindow("RPG", 200, 200, int32(ui.winWidth), int32(ui.winHeight), sdl.WINDOW_SHOWN)
 
 	if err != nil {
-		fmt.Println(err)
-		return
+		panic(err)
 	}
+	ui.window = window
 
-	renderer, err = sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED)
+	ui.renderer, err = sdl.CreateRenderer(ui.window, -1, sdl.RENDERER_ACCELERATED)
 	if err != nil {
-		fmt.Println(err)
-		return
+		panic(err)
 	}
 
 	sdl.SetHint(sdl.HINT_RENDER_SCALE_QUALITY, "1")
 
-	textureAtlas = imgFileToTexture("ui2d/assets/tiles.png")
-	loadTextureIndex()
+	ui.textureAtlas = ui.imgFileToTexture("ui2d/assets/tiles.png")
+	ui.loadTextureIndex()
 
-	keyboardState = sdl.GetKeyboardState()
-	prevKeyboardState = make([]uint8, len(keyboardState))
-	copy(prevKeyboardState, keyboardState)
+	ui.keyboardState = sdl.GetKeyboardState()
+	ui.prevKeyboardState = make([]uint8, len(ui.keyboardState))
+	copy(ui.prevKeyboardState, ui.keyboardState)
 
-	centerX = -1
-	centerY = -1
+	ui.centerX = -1
+	ui.centerY = -1
+
+	return ui
 }
 
-type UI2d struct {
-}
-
-func (ui *UI2d) Draw(level *game.Level) {
+func (ui *ui) Draw(level *game.Level) {
 
 	p := level.Player
 
-	if centerX == -1 && centerY == -1 {
-		centerX = p.X
-		centerY = p.Y
+	if ui.centerX == -1 && ui.centerY == -1 {
+		ui.centerX = p.X
+		ui.centerY = p.Y
 	}
 
 	limit := 5
 
-	if p.X > centerX+limit {
-		centerX++
-	} else if p.X < centerX-limit {
-		centerX--
-	} else if p.Y > centerY+limit {
-		centerY++
-	} else if p.Y < centerY-limit {
-		centerY--
+	if p.X > ui.centerX+limit {
+		ui.centerX++
+	} else if p.X < ui.centerX-limit {
+		ui.centerX--
+	} else if p.Y > ui.centerY+limit {
+		ui.centerY++
+	} else if p.Y < ui.centerY-limit {
+		ui.centerY--
 	}
 
-	offsetX := int32((winWidth / 2) - centerX*32)
-	offsetY := int32((winHeight / 2) - centerY*32)
+	offsetX := int32((ui.winWidth / 2) - ui.centerX*32)
+	offsetY := int32((ui.winHeight / 2) - ui.centerY*32)
 
-	renderer.Clear()
+	ui.renderer.Clear()
 	rand.Seed(1)
 
 	for y, row := range level.Map {
 		for x, tile := range row {
 			if tile != game.Blank {
-				srcRects := textureIndex[tile]
+				srcRects := ui.textureIndex[tile]
 				srcRect := srcRects[rand.Intn(len(srcRects))]
 				dstRect := sdl.Rect{X: int32(x)*32 + offsetX, Y: int32(y)*32 + offsetY, W: 32, H: 32}
 
 				pos := game.Pos{X: x, Y: y}
 				if level.Debug[pos] {
-					textureAtlas.SetColorMod(128, 0, 0)
+					ui.textureAtlas.SetColorMod(128, 0, 0)
 				} else {
-					textureAtlas.SetColorMod(255, 255, 255)
+					ui.textureAtlas.SetColorMod(255, 255, 255)
 				}
 
-				renderer.Copy(textureAtlas, &srcRect, &dstRect)
+				ui.renderer.Copy(ui.textureAtlas, &srcRect, &dstRect)
 			}
 		}
 	}
 
-	renderer.Copy(textureAtlas, &sdl.Rect{X: 21 * 32, Y: 59 * 32, W: 32, H: 32}, &sdl.Rect{X: int32(p.X)*32 + offsetX, Y: int32(p.Y)*32 + offsetY, W: 32, H: 32})
+	ui.renderer.Copy(ui.textureAtlas, &sdl.Rect{X: 21 * 32, Y: 59 * 32, W: 32, H: 32}, &sdl.Rect{X: int32(p.X)*32 + offsetX, Y: int32(p.Y)*32 + offsetY, W: 32, H: 32})
 
-	renderer.Present()
+	ui.renderer.Present()
 
 }
 
-func (ui *UI2d) GetInput() *game.Input {
+func (ui *ui) Run() {
 
 	for {
 
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-			switch event.(type) {
+			switch 3 := event.(type) {
 			case *sdl.QuitEvent:
-				return &game.Input{Type: game.Quit}
+				ui.inputChan <- &game.Input{Type: game.QuitGame}
+			case *sdl.WindowEvent:
+				if e.Event == sdl.WINDOWEVENT_CLOSE {
+					ui.inputChan <- &game.Input{Type: game.CloseWindow, LevelChannel: ui.levelChan}
+				}
 			}
 		}
 
 		var input game.Input
-		if keyboardState[sdl.SCANCODE_UP] == 0 && prevKeyboardState[sdl.SCANCODE_UP] != 0 {
+		if ui.keyboardState[sdl.SCANCODE_UP] == 0 && ui.prevKeyboardState[sdl.SCANCODE_UP] != 0 {
 			input.Type = game.Up
 		}
-		if keyboardState[sdl.SCANCODE_DOWN] == 0 && prevKeyboardState[sdl.SCANCODE_DOWN] != 0 {
+		if ui.keyboardState[sdl.SCANCODE_DOWN] == 0 && ui.prevKeyboardState[sdl.SCANCODE_DOWN] != 0 {
 			input.Type = game.Down
 		}
-		if keyboardState[sdl.SCANCODE_LEFT] == 0 && prevKeyboardState[sdl.SCANCODE_LEFT] != 0 {
+		if ui.keyboardState[sdl.SCANCODE_LEFT] == 0 && ui.prevKeyboardState[sdl.SCANCODE_LEFT] != 0 {
 			input.Type = game.Left
 		}
-		if keyboardState[sdl.SCANCODE_RIGHT] == 0 && prevKeyboardState[sdl.SCANCODE_RIGHT] != 0 {
+		if ui.keyboardState[sdl.SCANCODE_RIGHT] == 0 && ui.prevKeyboardState[sdl.SCANCODE_RIGHT] != 0 {
 			input.Type = game.Right
 		}
-		if keyboardState[sdl.SCANCODE_S] == 0 && prevKeyboardState[sdl.SCANCODE_S] != 0 {
+		if ui.keyboardState[sdl.SCANCODE_S] == 0 && ui.prevKeyboardState[sdl.SCANCODE_S] != 0 {
 			input.Type = game.Search
 		}
 
-		copy(prevKeyboardState, keyboardState)
+		copy(ui.prevKeyboardState, ui.keyboardState)
 
 		if input.Type != game.None {
-			return &input
+			ui.inputChan <- &input
 		}
 
 	}

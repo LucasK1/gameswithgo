@@ -7,9 +7,20 @@ import (
 	"time"
 )
 
-type GameUI interface {
-	Draw(*Level)
-	GetInput() *Input
+type Game struct {
+	LevelChans []chan *Level
+	InputChan  chan *Input
+	Level      *Level
+}
+
+func NewGame(numWindows int, path string) *Game {
+	levelChans := make([]chan *Level, numWindows)
+	for i := range levelChans {
+		levelChans[i] = make(chan *Level)
+	}
+	inputChan := make(chan *Input)
+
+	return &Game{LevelChans: levelChans, InputChan: inputChan, Level: loadLevelFromFile(path)}
 }
 
 type InputType int
@@ -20,12 +31,14 @@ const (
 	Down
 	Left
 	Right
-	Quit
+	QuitGame
+	CloseWindow
 	Search
 )
 
 type Input struct {
-	Type InputType
+	Type         InputType
+	LeveLChannel chan *Level
 }
 
 type Tile rune
@@ -147,7 +160,8 @@ func checkDoor(level *Level, pos Pos) {
 	}
 }
 
-func handleInput(ui GameUI, level *Level, input *Input) {
+func (game *Game) handleInput(input *Input) {
+	level := game.Level
 	p := level.Player
 	switch input.Type {
 	case Up:
@@ -178,7 +192,7 @@ func handleInput(ui GameUI, level *Level, input *Input) {
 			checkDoor(level, Pos{p.X + 1, p.Y})
 		}
 	case Search:
-		astar(ui, level, level.Player.Pos, Pos{X: 3, Y: 3})
+		game.astar(level.Player.Pos, Pos{X: 3, Y: 3})
 	}
 }
 
@@ -206,31 +220,32 @@ func getNeighbors(level *Level, pos Pos) []Pos {
 	return neighbors
 }
 
-// func bfs(ui GameUI, level *Level, start Pos) {
-// 	frontier := make([]Pos, 0, 8)
+func (game *Game) bfs(start Pos) {
+	level := game.Level
+	frontier := make([]Pos, 0, 8)
 
-// 	frontier = append(frontier, start)
+	frontier = append(frontier, start)
 
-// 	visited := make(map[Pos]bool)
-// 	visited[start] = true
-// 	level.Debug = visited
+	visited := make(map[Pos]bool)
+	visited[start] = true
+	level.Debug = visited
 
-// 	for len(frontier) > 0 {
-// 		current := frontier[0]
-// 		frontier = frontier[1:]
-// 		for _, next := range getNeighbors(level, current) {
-// 			if !visited[next] {
-// 				frontier = append(frontier, next)
-// 				visited[next] = true
-// 				ui.Draw(level)
-// 				time.Sleep(100 * time.Millisecond)
-// 			}
-// 		}
-// 	}
+	for len(frontier) > 0 {
+		current := frontier[0]
+		frontier = frontier[1:]
+		for _, next := range getNeighbors(level, current) {
+			if !visited[next] {
+				frontier = append(frontier, next)
+				visited[next] = true
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+	}
 
-// }
+}
 
-func astar(ui GameUI, level *Level, start Pos, goal Pos) []Pos {
+func (game *Game) astar(start Pos, goal Pos) []Pos {
+	level := game.Level
 	frontier := make(pqueue, 0, 8)
 	frontier = frontier.push(start, 1)
 
@@ -261,7 +276,6 @@ func astar(ui GameUI, level *Level, start Pos, goal Pos) []Pos {
 			}
 			for _, pos := range path {
 				level.Debug[pos] = true
-				ui.Draw(level)
 				time.Sleep(100 * time.Millisecond)
 			}
 			return path
@@ -276,6 +290,8 @@ func astar(ui GameUI, level *Level, start Pos, goal Pos) []Pos {
 				yDist := int(math.Abs(float64(goal.Y - next.Y)))
 				priority := newCost + xDist + yDist
 				frontier = frontier.push(next, priority)
+				level.Debug[next] = true
+				time.Sleep(100 * time.Millisecond)
 				cameFrom[next] = current
 			}
 		}
@@ -283,18 +299,24 @@ func astar(ui GameUI, level *Level, start Pos, goal Pos) []Pos {
 	return nil
 }
 
-func Run(ui GameUI) {
-	level := loadLevelFromFile("game/maps/level1.map")
+func (game *Game) Run() {
 
-	for {
+	for _, lchan := range game.LevelChans {
+		lchan <- game.Level
+	}
 
-		ui.Draw(level)
-
-		input := ui.GetInput()
-
-		if input != nil && input.Type == Quit {
+	for input := range game.InputChan {
+		if input.Type == QuitGame {
 			return
 		}
-		handleInput(ui, level, input)
+		game.handleInput(input)
+
+		if len(game.LevelChans) == 0 {
+			return
+		}
+
+		for _, lchan := range game.LevelChans {
+			lchan <- game.Level
+		}
 	}
 }
