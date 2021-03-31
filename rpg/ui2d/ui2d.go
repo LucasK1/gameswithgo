@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"image/png"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -17,10 +18,10 @@ const winWidth, winHeight = 1280, 720
 var renderer *sdl.Renderer
 var textureAtlas *sdl.Texture
 
-var textureIndex map[game.Tile]sdl.Rect
+var textureIndex map[game.Tile][]sdl.Rect
 
 func loadTextureIndex() {
-	textureIndex = make(map[game.Tile]sdl.Rect)
+	textureIndex = make(map[game.Tile][]sdl.Rect)
 
 	infile, err := os.Open("ui2d/assets/atlas-index.txt")
 	if err != nil {
@@ -34,20 +35,31 @@ func loadTextureIndex() {
 		tileRune := game.Tile(line[0])
 		xy := line[1:]
 
-		splitXY := strings.Split(xy, ",")
+		splitXYC := strings.Split(xy, ",")
 
-		x, err := strconv.ParseInt(strings.TrimSpace(splitXY[0]), 10, 64)
+		x, err := strconv.ParseInt(strings.TrimSpace(splitXYC[0]), 10, 64)
 		if err != nil {
 			panic(err)
 		}
-		y, err := strconv.ParseInt(strings.TrimSpace(splitXY[1]), 10, 64)
+		y, err := strconv.ParseInt(strings.TrimSpace(splitXYC[1]), 10, 64)
+		if err != nil {
+			panic(err)
+		}
+		variationCount, err := strconv.ParseInt(strings.TrimSpace(splitXYC[2]), 10, 64)
 		if err != nil {
 			panic(err)
 		}
 
-		rect := sdl.Rect{X: int32(x * 32), Y: int32(y * 32), W: 32, H: 32}
-
-		textureIndex[tileRune] = rect
+		var rects []sdl.Rect
+		for i := 0; i < int(variationCount); i++ {
+			rects = append(rects, sdl.Rect{X: int32(x * 32), Y: int32(y * 32), W: 32, H: 32})
+			x++
+			if x > 62 {
+				x = 0
+				y++
+			}
+		}
+		textureIndex[tileRune] = rects
 	}
 }
 
@@ -130,24 +142,32 @@ type UI2d struct {
 
 func (ui *UI2d) Draw(level *game.Level) {
 
-	renderer.Clear()
+	rand.Seed(1)
 
+	renderer.Clear()
 	for y, row := range level.Map {
 		for x, tile := range row {
-			srcRect := textureIndex[tile]
-			dstRect := sdl.Rect{X: int32(x * 32), Y: int32(y * 32), W: 32, H: 32}
-			renderer.Copy(textureAtlas, &srcRect, &dstRect)
-		}
-	}
-
-	renderer.Present()
-
-	for {
-		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-			switch event.(type) {
-			case *sdl.QuitEvent:
-				return
+			if tile != game.Blank {
+				srcRects := textureIndex[tile]
+				srcRect := srcRects[rand.Intn(len(srcRects))]
+				dstRect := sdl.Rect{X: int32(x * 32), Y: int32(y * 32), W: 32, H: 32}
+				renderer.Copy(textureAtlas, &srcRect, &dstRect)
 			}
 		}
 	}
+
+	renderer.Copy(textureAtlas, &sdl.Rect{X: 21 * 32, Y: 59 * 32, W: 32, H: 32}, &sdl.Rect{X: int32(level.Player.X) * 32, Y: int32(level.Player.Y) * 32, W: 32, H: 32})
+
+	renderer.Present()
+
+}
+
+func (ui *UI2d) GetInput() *game.Input {
+	for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
+		switch event.(type) {
+		case *sdl.QuitEvent:
+			return &game.Input{Type: game.Quit}
+		}
+	}
+	return nil
 }
