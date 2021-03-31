@@ -2,7 +2,9 @@ package game
 
 import (
 	"bufio"
+	"math"
 	"os"
+	"sort"
 	"time"
 )
 
@@ -54,6 +56,23 @@ type Level struct {
 	Map    [][]Tile
 	Player Player
 	Debug  map[Pos]bool
+}
+
+type priorityPos struct {
+	Pos
+	priority int
+}
+
+type priorityArray []priorityPos
+
+func (p priorityArray) Len() int {
+	return len(p)
+}
+func (p priorityArray) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
+}
+func (p priorityArray) Less(i, j int) bool {
+	return p[i].priority < p[j].priority
 }
 
 func loadLevelFromFile(filename string) *Level {
@@ -128,8 +147,8 @@ func loadLevelFromFile(filename string) *Level {
 	return level
 }
 
-func canWalk(level *Level, x, y int) bool {
-	t := level.Map[y][x]
+func canWalk(level *Level, pos Pos) bool {
+	t := level.Map[pos.Y][pos.X]
 	switch t {
 	case StoneWall, ClosedDoor, Blank:
 		return false
@@ -138,11 +157,11 @@ func canWalk(level *Level, x, y int) bool {
 	}
 }
 
-func checkDoor(level *Level, x, y int) {
-	t := level.Map[y][x]
+func checkDoor(level *Level, pos Pos) {
+	t := level.Map[pos.Y][pos.X]
 
 	if t == ClosedDoor {
-		level.Map[y][x] = OpenDoor
+		level.Map[pos.Y][pos.X] = OpenDoor
 	}
 }
 
@@ -150,31 +169,31 @@ func handleInput(ui GameUI, level *Level, input *Input) {
 	p := level.Player
 	switch input.Type {
 	case Up:
-		if canWalk(level, p.X, p.Y-1) {
+		if canWalk(level, Pos{X: p.X, Y: p.Y - 1}) {
 			level.Player.Y--
 		} else {
-			checkDoor(level, p.X, p.Y-1)
+			checkDoor(level, Pos{X: p.X, Y: p.Y - 1})
 		}
 
 	case Down:
-		if canWalk(level, p.X, p.Y+1) {
+		if canWalk(level, Pos{X: p.X, Y: p.Y + 1}) {
 			level.Player.Y++
 		} else {
-			checkDoor(level, p.X, p.Y+1)
+			checkDoor(level, Pos{X: p.X, Y: p.Y + 1})
 		}
 
 	case Left:
-		if canWalk(level, p.X-1, p.Y) {
+		if canWalk(level, Pos{X: p.X - 1, Y: p.Y}) {
 			level.Player.X--
 		} else {
-			checkDoor(level, p.X-1, p.Y)
+			checkDoor(level, Pos{X: p.X - 1, Y: p.Y})
 		}
 
 	case Right:
-		if canWalk(level, p.X+1, p.Y) {
+		if canWalk(level, Pos{p.X + 1, p.Y}) {
 			level.Player.X++
 		} else {
-			checkDoor(level, p.X+1, p.Y)
+			checkDoor(level, Pos{p.X + 1, p.Y})
 		}
 	case Search:
 		bfs(ui, level, level.Player.Pos)
@@ -189,10 +208,18 @@ func getNeighbors(level *Level, pos Pos) []Pos {
 	up := Pos{X: pos.X, Y: pos.Y - 1}
 	down := Pos{X: pos.X, Y: pos.Y + 1}
 
-	neighbors = append(neighbors, right)
-	neighbors = append(neighbors, left)
-	neighbors = append(neighbors, up)
-	neighbors = append(neighbors, down)
+	if canWalk(level, right) {
+		neighbors = append(neighbors, right)
+	}
+	if canWalk(level, left) {
+		neighbors = append(neighbors, left)
+	}
+	if canWalk(level, up) {
+		neighbors = append(neighbors, up)
+	}
+	if canWalk(level, down) {
+		neighbors = append(neighbors, down)
+	}
 
 	return neighbors
 }
@@ -208,7 +235,7 @@ func bfs(ui GameUI, level *Level, start Pos) {
 
 	for len(frontier) > 0 {
 		current := frontier[0]
-		frontier := frontier[1:]
+		frontier = frontier[1:]
 		for _, next := range getNeighbors(level, current) {
 			if !visited[next] {
 				frontier = append(frontier, next)
@@ -219,6 +246,38 @@ func bfs(ui GameUI, level *Level, start Pos) {
 		}
 	}
 
+}
+
+func astar(ui GameUI, level *Level, start Pos, goal Pos) {
+	frontier := make(priorityArray, 0, 8)
+	frontier = append(frontier, priorityPos{start, 1})
+
+	cameFrom := make(map[Pos]Pos)
+	cameForm[start] = start
+
+	costSoFar := make(map[Pos]int)
+	costSoFar[start] = 0
+
+	for len(frontier) > 0 {
+		sort.Stable(frontier)
+		current := frontier[0]
+
+		if current.Pos == goal {
+			break
+		}
+
+		frontier = frontier[1:]
+
+		for _, next := range getNeighbors(level, current.Pos) {
+			newCost := costSoFar[current.Pos] + 1
+			_, exists := costSoFar[next]
+			if !exists || newCost < costSoFar[next] {
+			}
+			costSoFar[next] = newCost
+			xDist := int(math.Abs(float64(goal.X - next.X)))
+			yDist := int(math.Abs(float64(goal.Y - next.Y)))
+		}
+	}
 }
 
 func Run(ui GameUI) {
