@@ -175,9 +175,9 @@ func (ui *UI2d) Draw(level *game.Level) {
 	offsetX := int32((winWidth / 2) - centerX*32)
 	offsetY := int32((winHeight / 2) - centerY*32)
 
+	renderer.Clear()
 	rand.Seed(1)
 
-	renderer.Clear()
 	for y, row := range level.Map {
 		for x, tile := range row {
 			if tile != game.Blank {
@@ -226,6 +226,9 @@ func (ui *UI2d) GetInput() *game.Input {
 		}
 		if keyboardState[sdl.SCANCODE_RIGHT] == 0 && prevKeyboardState[sdl.SCANCODE_RIGHT] != 0 {
 			input.Type = game.Right
+		}
+		if keyboardState[sdl.SCANCODE_S] == 0 && prevKeyboardState[sdl.SCANCODE_S] != 0 {
+			input.Type = game.Search
 		}
 
 		copy(prevKeyboardState, keyboardState)

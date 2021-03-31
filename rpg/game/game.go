@@ -3,6 +3,7 @@ package game
 import (
 	"bufio"
 	"os"
+	"time"
 )
 
 type GameUI interface {
@@ -19,6 +20,7 @@ const (
 	Left
 	Right
 	Quit
+	Search
 )
 
 type Input struct {
@@ -144,7 +146,7 @@ func checkDoor(level *Level, x, y int) {
 	}
 }
 
-func handleInput(level *Level, input *Input) {
+func handleInput(ui GameUI, level *Level, input *Input) {
 	p := level.Player
 	switch input.Type {
 	case Up:
@@ -174,7 +176,49 @@ func handleInput(level *Level, input *Input) {
 		} else {
 			checkDoor(level, p.X+1, p.Y)
 		}
+	case Search:
+		bfs(ui, level, level.Player.Pos)
 	}
+}
+
+func getNeighbors(level *Level, pos Pos) []Pos {
+	neighbors := make([]Pos, 0, 4)
+
+	left := Pos{X: pos.X - 1, Y: pos.Y}
+	right := Pos{X: pos.X + 1, Y: pos.Y}
+	up := Pos{X: pos.X, Y: pos.Y - 1}
+	down := Pos{X: pos.X, Y: pos.Y + 1}
+
+	neighbors = append(neighbors, right)
+	neighbors = append(neighbors, left)
+	neighbors = append(neighbors, up)
+	neighbors = append(neighbors, down)
+
+	return neighbors
+}
+
+func bfs(ui GameUI, level *Level, start Pos) {
+	frontier := make([]Pos, 0, 8)
+
+	frontier = append(frontier, start)
+
+	visited := make(map[Pos]bool)
+	visited[start] = true
+	level.Debug = visited
+
+	for len(frontier) > 0 {
+		current := frontier[0]
+		frontier := frontier[1:]
+		for _, next := range getNeighbors(level, current) {
+			if !visited[next] {
+				frontier = append(frontier, next)
+				visited[next] = true
+				ui.Draw(level)
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+	}
+
 }
 
 func Run(ui GameUI) {
@@ -189,6 +233,6 @@ func Run(ui GameUI) {
 		if input != nil && input.Type == Quit {
 			return
 		}
-		handleInput(level, input)
+		handleInput(ui, level, input)
 	}
 }
