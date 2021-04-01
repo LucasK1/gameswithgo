@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"math"
 	"os"
-	"time"
 )
 
 type Game struct {
@@ -132,17 +131,7 @@ func loadLevelFromFile(filename string) *Level {
 		for x, tile := range row {
 			if tile == Pending {
 
-			SearchLoop:
-				for searchX := x - 1; searchX <= x+1; searchX++ {
-					for searchY := y - 1; searchY <= y+1; searchY++ {
-						searchTile := level.Map[searchY][searchX]
-						switch searchTile {
-						case DirtFloor:
-							level.Map[y][x] = DirtFloor
-							break SearchLoop
-						}
-					}
-				}
+				level.Map[y][x] = level.bfsFloor(Pos{x, y})
 			}
 		}
 	}
@@ -150,14 +139,21 @@ func loadLevelFromFile(filename string) *Level {
 	return level
 }
 
+func inRange(level *Level, pos Pos) bool {
+	return pos.X < len(level.Map[0]) && pos.Y < len(level.Map) && pos.X >= 0 && pos.Y >= 0
+}
+
 func canWalk(level *Level, pos Pos) bool {
-	t := level.Map[pos.Y][pos.X]
-	switch t {
-	case StoneWall, ClosedDoor, Blank:
-		return false
-	default:
-		return true
+	if inRange(level, pos) {
+		t := level.Map[pos.Y][pos.X]
+		switch t {
+		case StoneWall, ClosedDoor, Blank:
+			return false
+		default:
+			return true
+		}
 	}
+	return false
 }
 
 func checkDoor(level *Level, pos Pos) {
@@ -253,7 +249,7 @@ func getNeighbors(level *Level, pos Pos) []Pos {
 	return neighbors
 }
 
-func (level *Level) bfs(start Pos) {
+func (level *Level) bfsFloor(start Pos) Tile {
 	frontier := make([]Pos, 0, 8)
 
 	frontier = append(frontier, start)
@@ -264,16 +260,23 @@ func (level *Level) bfs(start Pos) {
 
 	for len(frontier) > 0 {
 		current := frontier[0]
+
+		currentTile := level.Map[current.Y][current.X]
+		switch currentTile {
+		case DirtFloor:
+			return DirtFloor
+		default:
+		}
+
 		frontier = frontier[1:]
 		for _, next := range getNeighbors(level, current) {
 			if !visited[next] {
 				frontier = append(frontier, next)
 				visited[next] = true
-				time.Sleep(100 * time.Millisecond)
 			}
 		}
 	}
-
+	return DirtFloor
 }
 
 func (level *Level) astar(start Pos, goal Pos) []Pos {
