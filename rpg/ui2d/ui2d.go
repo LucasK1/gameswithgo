@@ -2,7 +2,6 @@ package ui2d
 
 import (
 	"bufio"
-	"fmt"
 	"image/png"
 	"math/rand"
 	"os"
@@ -24,8 +23,44 @@ type ui struct {
 	prevKeyboardState []uint8
 	centerX           int
 	centerY           int
-	levelChannel      chan *game.Level
-	inputChan             chan *game.Input
+	r                 *rand.Rand
+	levelChan         chan *game.Level
+	inputChan         chan *game.Input
+}
+
+func NewUI(inputChan chan *game.Input, levelChan chan *game.Level) *ui {
+
+	ui := &ui{}
+	ui.inputChan = inputChan
+	ui.levelChan = levelChan
+	ui.r = rand.New(rand.NewSource(1))
+	ui.winHeight = 720
+	ui.winWidth = 1280
+
+	window, err := sdl.CreateWindow("RPG", 200, 200, int32(ui.winWidth), int32(ui.winHeight), sdl.WINDOW_SHOWN)
+	if err != nil {
+		panic(err)
+	}
+	ui.window = window
+
+	ui.renderer, err = sdl.CreateRenderer(ui.window, -1, sdl.RENDERER_ACCELERATED)
+	if err != nil {
+		panic(err)
+	}
+
+	sdl.SetHint(sdl.HINT_RENDER_SCALE_QUALITY, "1")
+
+	ui.textureAtlas = ui.imgFileToTexture("ui2d/assets/tiles.png")
+	ui.loadTextureIndex()
+
+	ui.keyboardState = sdl.GetKeyboardState()
+	ui.prevKeyboardState = make([]uint8, len(ui.keyboardState))
+	copy(ui.prevKeyboardState, ui.keyboardState)
+
+	ui.centerX = -1
+	ui.centerY = -1
+
+	return ui
 }
 
 func (ui *ui) loadTextureIndex() {
@@ -121,42 +156,9 @@ func (ui *ui) imgFileToTexture(filename string) *sdl.Texture {
 func init() {
 	err := sdl.Init(sdl.INIT_EVERYTHING)
 	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-}
-func NewUI(inputChan chan *game.Input, levelChan chan *game.Level) *ui {
-
-	ui := &ui()
-	ui.inputChan = inputChan
-	ui.levelChan = levelChan
-
-	window, err := sdl.CreateWindow("RPG", 200, 200, int32(ui.winWidth), int32(ui.winHeight), sdl.WINDOW_SHOWN)
-
-	if err != nil {
-		panic(err)
-	}
-	ui.window = window
-
-	ui.renderer, err = sdl.CreateRenderer(ui.window, -1, sdl.RENDERER_ACCELERATED)
-	if err != nil {
 		panic(err)
 	}
 
-	sdl.SetHint(sdl.HINT_RENDER_SCALE_QUALITY, "1")
-
-	ui.textureAtlas = ui.imgFileToTexture("ui2d/assets/tiles.png")
-	ui.loadTextureIndex()
-
-	ui.keyboardState = sdl.GetKeyboardState()
-	ui.prevKeyboardState = make([]uint8, len(ui.keyboardState))
-	copy(ui.prevKeyboardState, ui.keyboardState)
-
-	ui.centerX = -1
-	ui.centerY = -1
-
-	return ui
 }
 
 func (ui *ui) Draw(level *game.Level) {
@@ -184,13 +186,13 @@ func (ui *ui) Draw(level *game.Level) {
 	offsetY := int32((ui.winHeight / 2) - ui.centerY*32)
 
 	ui.renderer.Clear()
-	rand.Seed(1)
+	ui.r.Seed(1)
 
 	for y, row := range level.Map {
 		for x, tile := range row {
 			if tile != game.Blank {
 				srcRects := ui.textureIndex[tile]
-				srcRect := srcRects[rand.Intn(len(srcRects))]
+				srcRect := srcRects[ui.r.Intn(len(srcRects))]
 				dstRect := sdl.Rect{X: int32(x)*32 + offsetX, Y: int32(y)*32 + offsetY, W: 32, H: 32}
 
 				pos := game.Pos{X: x, Y: y}
@@ -214,9 +216,8 @@ func (ui *ui) Draw(level *game.Level) {
 func (ui *ui) Run() {
 
 	for {
-
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-			switch 3 := event.(type) {
+			switch e := event.(type) {
 			case *sdl.QuitEvent:
 				ui.inputChan <- &game.Input{Type: game.QuitGame}
 			case *sdl.WindowEvent:
@@ -226,28 +227,38 @@ func (ui *ui) Run() {
 			}
 		}
 
-		var input game.Input
-		if ui.keyboardState[sdl.SCANCODE_UP] == 0 && ui.prevKeyboardState[sdl.SCANCODE_UP] != 0 {
-			input.Type = game.Up
-		}
-		if ui.keyboardState[sdl.SCANCODE_DOWN] == 0 && ui.prevKeyboardState[sdl.SCANCODE_DOWN] != 0 {
-			input.Type = game.Down
-		}
-		if ui.keyboardState[sdl.SCANCODE_LEFT] == 0 && ui.prevKeyboardState[sdl.SCANCODE_LEFT] != 0 {
-			input.Type = game.Left
-		}
-		if ui.keyboardState[sdl.SCANCODE_RIGHT] == 0 && ui.prevKeyboardState[sdl.SCANCODE_RIGHT] != 0 {
-			input.Type = game.Right
-		}
-		if ui.keyboardState[sdl.SCANCODE_S] == 0 && ui.prevKeyboardState[sdl.SCANCODE_S] != 0 {
-			input.Type = game.Search
+		select {
+		case newLevel, ok := <-ui.levelChan:
+			if ok {
+				ui.Draw(newLevel)
+			}
+		default:
 		}
 
-		copy(ui.prevKeyboardState, ui.keyboardState)
+		if sdl.GetKeyboardFocus() == ui.window || sdl.GetMouseFocus() == ui.window {
+			var input game.Input
+			if ui.keyboardState[sdl.SCANCODE_UP] == 0 && ui.prevKeyboardState[sdl.SCANCODE_UP] != 0 {
+				input.Type = game.Up
+			}
+			if ui.keyboardState[sdl.SCANCODE_DOWN] == 0 && ui.prevKeyboardState[sdl.SCANCODE_DOWN] != 0 {
+				input.Type = game.Down
+			}
+			if ui.keyboardState[sdl.SCANCODE_LEFT] == 0 && ui.prevKeyboardState[sdl.SCANCODE_LEFT] != 0 {
+				input.Type = game.Left
+			}
+			if ui.keyboardState[sdl.SCANCODE_RIGHT] == 0 && ui.prevKeyboardState[sdl.SCANCODE_RIGHT] != 0 {
+				input.Type = game.Right
+			}
+			if ui.keyboardState[sdl.SCANCODE_S] == 0 && ui.prevKeyboardState[sdl.SCANCODE_S] != 0 {
+				input.Type = game.Search
+			}
 
-		if input.Type != game.None {
-			ui.inputChan <- &input
+			copy(ui.prevKeyboardState, ui.keyboardState)
+
+			if input.Type != game.None {
+				ui.inputChan <- &input
+			}
 		}
-
+		sdl.Delay(10)
 	}
 }

@@ -38,7 +38,7 @@ const (
 
 type Input struct {
 	Type         InputType
-	LeveLChannel chan *Level
+	LevelChannel chan *Level
 }
 
 type Tile rune
@@ -191,8 +191,20 @@ func (game *Game) handleInput(input *Input) {
 		} else {
 			checkDoor(level, Pos{p.X + 1, p.Y})
 		}
+
 	case Search:
 		game.astar(level.Player.Pos, Pos{X: 3, Y: 3})
+
+	case CloseWindow:
+		close(input.LevelChannel)
+		chanIndex := 0
+		for i, c := range game.LevelChans {
+			if c == input.LevelChannel {
+				chanIndex = i
+				break
+			}
+		}
+		game.LevelChans = append(game.LevelChans[:chanIndex], game.LevelChans[chanIndex+1:]...)
 	}
 }
 
