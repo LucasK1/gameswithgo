@@ -65,9 +65,10 @@ type Player struct {
 }
 
 type Level struct {
-	Map    [][]Tile
-	Player Player
-	Debug  map[Pos]bool
+	Map      [][]Tile
+	Player   Player
+	Monsters map[Pos]*Monster
+	Debug    map[Pos]bool
 }
 
 func loadLevelFromFile(filename string) *Level {
@@ -90,6 +91,7 @@ func loadLevelFromFile(filename string) *Level {
 	}
 	level := &Level{}
 	level.Map = make([][]Tile, len(levelLines))
+	level.Monsters = make(map[Pos]*Monster)
 
 	for i := range level.Map {
 		level.Map[i] = make([]Tile, longestRow)
@@ -109,9 +111,15 @@ func loadLevelFromFile(filename string) *Level {
 				t = OpenDoor
 			case '.':
 				t = DirtFloor
-			case 'P':
+			case '@':
 				level.Player.X = x
 				level.Player.Y = y
+				t = Pending
+			case 'R':
+				level.Monsters[Pos{x, y}] = NewRat(Pos{x, y})
+				t = Pending
+			case 'S':
+				level.Monsters[Pos{x, y}] = NewSpider(Pos{x, y})
 				t = Pending
 			default:
 				panic("Invalid character in map")
@@ -160,51 +168,64 @@ func checkDoor(level *Level, pos Pos) {
 	}
 }
 
-func (game *Game) handleInput(input *Input) {
-	level := game.Level
+func (player *Player) Move(to Pos, level *Level) {
+	_, exists := level.Monsters[to]
+	if !exists {
+		player.Pos = to
+	}
+}
+
+func (gameStruct *Game) handleInput(input *Input) {
+	level := gameStruct.Level
 	p := level.Player
 	switch input.Type {
 	case Up:
-		if canWalk(level, Pos{X: p.X, Y: p.Y - 1}) {
-			level.Player.Y--
+		newPos := Pos{X: p.X, Y: p.Y - 1}
+		if canWalk(level, newPos) {
+			level.Player.Move(newPos, level)
 		} else {
-			checkDoor(level, Pos{X: p.X, Y: p.Y - 1})
+			checkDoor(level, newPos)
 		}
 
 	case Down:
-		if canWalk(level, Pos{X: p.X, Y: p.Y + 1}) {
-			level.Player.Y++
+		newPos := Pos{X: p.X, Y: p.Y + 1}
+		if canWalk(level, newPos) {
+			level.Player.Move(newPos, level)
+
 		} else {
-			checkDoor(level, Pos{X: p.X, Y: p.Y + 1})
+			checkDoor(level, newPos)
 		}
 
 	case Left:
-		if canWalk(level, Pos{X: p.X - 1, Y: p.Y}) {
-			level.Player.X--
+		newPos := Pos{X: p.X - 1, Y: p.Y}
+		if canWalk(level, newPos) {
+			level.Player.Move(newPos, level)
+
 		} else {
-			checkDoor(level, Pos{X: p.X - 1, Y: p.Y})
+			checkDoor(level, newPos)
 		}
 
 	case Right:
-		if canWalk(level, Pos{p.X + 1, p.Y}) {
-			level.Player.X++
+		newPos := Pos{p.X + 1, p.Y}
+		if canWalk(level, newPos) {
+			level.Player.Move(newPos, level)
 		} else {
-			checkDoor(level, Pos{p.X + 1, p.Y})
+			checkDoor(level, newPos)
 		}
 
 	case Search:
-		game.astar(level.Player.Pos, Pos{X: 3, Y: 3})
+		level.astar(level.Player.Pos, Pos{X: 3, Y: 3})
 
 	case CloseWindow:
 		close(input.LevelChannel)
 		chanIndex := 0
-		for i, c := range game.LevelChans {
+		for i, c := range gameStruct.LevelChans {
 			if c == input.LevelChannel {
 				chanIndex = i
 				break
 			}
 		}
-		game.LevelChans = append(game.LevelChans[:chanIndex], game.LevelChans[chanIndex+1:]...)
+		gameStruct.LevelChans = append(gameStruct.LevelChans[:chanIndex], gameStruct.LevelChans[chanIndex+1:]...)
 	}
 }
 
@@ -232,8 +253,7 @@ func getNeighbors(level *Level, pos Pos) []Pos {
 	return neighbors
 }
 
-func (game *Game) bfs(start Pos) {
-	level := game.Level
+func (level *Level) bfs(start Pos) {
 	frontier := make([]Pos, 0, 8)
 
 	frontier = append(frontier, start)
@@ -256,8 +276,7 @@ func (game *Game) bfs(start Pos) {
 
 }
 
-func (game *Game) astar(start Pos, goal Pos) []Pos {
-	level := game.Level
+func (level *Level) astar(start Pos, goal Pos) []Pos {
 	frontier := make(pqueue, 0, 8)
 	frontier = frontier.push(start, 1)
 
@@ -266,8 +285,6 @@ func (game *Game) astar(start Pos, goal Pos) []Pos {
 
 	costSoFar := make(map[Pos]int)
 	costSoFar[start] = 0
-
-	level.Debug = make(map[Pos]bool)
 
 	var current Pos
 	for len(frontier) > 0 {
@@ -281,15 +298,11 @@ func (game *Game) astar(start Pos, goal Pos) []Pos {
 				p = cameFrom[p]
 			}
 			path = append(path, p)
-			level.Debug[p] = true
 
 			for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
 				path[i], path[j] = path[j], path[i]
 			}
-			for _, pos := range path {
-				level.Debug[pos] = true
-				time.Sleep(100 * time.Millisecond)
-			}
+
 			return path
 		}
 
@@ -298,12 +311,13 @@ func (game *Game) astar(start Pos, goal Pos) []Pos {
 			_, exists := costSoFar[next]
 			if !exists || newCost < costSoFar[next] {
 				costSoFar[next] = newCost
+
 				xDist := int(math.Abs(float64(goal.X - next.X)))
 				yDist := int(math.Abs(float64(goal.Y - next.Y)))
+
 				priority := newCost + xDist + yDist
 				frontier = frontier.push(next, priority)
-				level.Debug[next] = true
-				time.Sleep(100 * time.Millisecond)
+
 				cameFrom[next] = current
 			}
 		}
@@ -311,24 +325,27 @@ func (game *Game) astar(start Pos, goal Pos) []Pos {
 	return nil
 }
 
-func (game *Game) Run() {
+func (gameStruct *Game) Run() {
 
-	for _, lchan := range game.LevelChans {
-		lchan <- game.Level
+	for _, lchan := range gameStruct.LevelChans {
+		lchan <- gameStruct.Level
 	}
 
-	for input := range game.InputChan {
+	for input := range gameStruct.InputChan {
 		if input.Type == QuitGame {
 			return
 		}
-		game.handleInput(input)
+		gameStruct.handleInput(input)
+		for _, monster := range gameStruct.Level.Monsters {
+			monster.Update(gameStruct.Level)
+		}
 
-		if len(game.LevelChans) == 0 {
+		if len(gameStruct.LevelChans) == 0 {
 			return
 		}
 
-		for _, lchan := range game.LevelChans {
-			lchan <- game.Level
+		for _, lchan := range gameStruct.LevelChans {
+			lchan <- gameStruct.Level
 		}
 	}
 }
