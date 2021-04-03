@@ -7,11 +7,11 @@ type Monster struct {
 }
 
 func NewRat(pos Pos) *Monster {
-	return &Monster{Character: Character{Entity: Entity{Pos: pos, Name: "Rat", Rune: 'R'}, HP: 50, Strength: 5, Speed: 2.0, AP: 0.0}}
+	return &Monster{Character: Character{Entity: Entity{Pos: pos, Name: "Rat", Rune: 'R'}, HP: 500, Strength: 0, Speed: 2.0, AP: 0.0}}
 }
 
 func NewSpider(pos Pos) *Monster {
-	return &Monster{Character: Character{Entity: Entity{Pos: pos, Name: "Spider", Rune: 'S'}, HP: 100, Strength: 10, Speed: 1.0, AP: 0.0}}
+	return &Monster{Character: Character{Entity: Entity{Pos: pos, Name: "Spider", Rune: 'S'}, HP: 1000, Strength: 0, Speed: 1.0, AP: 0.0}}
 }
 
 func (m *Monster) Update(level *Level) {
@@ -25,7 +25,6 @@ func (m *Monster) Update(level *Level) {
 	moveIndex := 1
 	for i := 0; i < apInt; i++ {
 		if moveIndex < len(positions) {
-			fmt.Println(positions)
 			m.Move(positions[moveIndex], level)
 			moveIndex++
 			m.AP--

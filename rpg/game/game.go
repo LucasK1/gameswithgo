@@ -78,6 +78,7 @@ type Level struct {
 	Map      [][]Tile
 	Player   Player
 	Monsters map[Pos]*Monster
+	Events   []string
 	Debug    map[Pos]bool
 }
 
@@ -138,6 +139,8 @@ func loadLevelFromFile(filename string) *Level {
 		index++
 	}
 	level := &Level{}
+
+	level.Events = make([]string, 0)
 
 	level.Player.Name = "Dralanor"
 	level.Player.Rune = '@'
@@ -227,6 +230,7 @@ func (player *Player) Move(to Pos, level *Level) {
 		player.Pos = to
 	} else {
 		Attack(&level.Player.Character, &monster.Character)
+		level.Events = append(level.Events, "Player attacked monster")
 
 		if monster.HP <= 0 {
 			delete(level.Monsters, monster.Pos)
