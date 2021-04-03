@@ -2,6 +2,7 @@ package game
 
 import (
 	"bufio"
+	"fmt"
 	"math"
 	"os"
 )
@@ -57,10 +58,20 @@ type Pos struct {
 
 type Entity struct {
 	Pos
+	Name string
+	Rune rune
+}
+
+type Character struct {
+	Entity
+	HP       int
+	Strength int
+	Speed    float64
+	AP       float64
 }
 
 type Player struct {
-	Entity
+	Character
 }
 
 type Level struct {
@@ -68,6 +79,44 @@ type Level struct {
 	Player   Player
 	Monsters map[Pos]*Monster
 	Debug    map[Pos]bool
+}
+
+type Attackable interface {
+	GetAP() float64
+	SetAP(float64)
+	GetHP() int
+	SetHP(int)
+	GetAttackPower() int
+}
+
+func (c *Character) GetAP() float64 {
+	return c.AP
+}
+
+func (c *Character) SetAP(ap float64) {
+	c.AP = ap
+}
+
+func (c *Character) GetHP() int {
+	return c.HP
+}
+
+func (c *Character) SetHP(hp int) {
+	c.HP = hp
+}
+
+func (c *Character) GetAttackPower() int {
+	return c.Strength
+}
+
+func Attack(a1, a2 Attackable) {
+	a1.SetAP(a1.GetAP() - 1)
+	a2.SetHP(a2.GetHP() - a1.GetAttackPower())
+
+	if a2.GetHP() > 0 {
+		a2.SetAP(a2.GetAP() - 1)
+		a1.SetHP(a1.GetHP() - a2.GetAttackPower())
+	}
 }
 
 func loadLevelFromFile(filename string) *Level {
@@ -89,6 +138,14 @@ func loadLevelFromFile(filename string) *Level {
 		index++
 	}
 	level := &Level{}
+
+	level.Player.Name = "Dralanor"
+	level.Player.Rune = '@'
+	level.Player.HP = 20
+	level.Player.Strength = 20
+	level.Player.Speed = 1
+	level.Player.AP = 0
+
 	level.Map = make([][]Tile, len(levelLines))
 	level.Monsters = make(map[Pos]*Monster)
 
@@ -165,9 +222,21 @@ func checkDoor(level *Level, pos Pos) {
 }
 
 func (player *Player) Move(to Pos, level *Level) {
-	_, exists := level.Monsters[to]
+	monster, exists := level.Monsters[to]
 	if !exists {
 		player.Pos = to
+	} else {
+		Attack(&level.Player.Character, &monster.Character)
+
+		if monster.HP <= 0 {
+			delete(level.Monsters, monster.Pos)
+		}
+
+		if level.Player.HP <= 0 {
+			fmt.Println("You Died")
+			panic("You Died")
+		}
+
 	}
 }
 

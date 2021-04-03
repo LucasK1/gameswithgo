@@ -3,21 +3,15 @@ package game
 import "fmt"
 
 type Monster struct {
-	Pos
-	Rune     rune
-	Name     string
-	Hp       int
-	Strength int
-	Speed    float64
-	AP       float64
+	Character
 }
 
 func NewRat(pos Pos) *Monster {
-	return &Monster{pos, 'R', "Rat", 5, 5, 2.0, 0.0}
+	return &Monster{Character: Character{Entity: Entity{Pos: pos, Name: "Rat", Rune: 'R'}, HP: 50, Strength: 5, Speed: 2.0, AP: 0.0}}
 }
 
 func NewSpider(pos Pos) *Monster {
-	return &Monster{pos, 'S', "Spider", 10, 10, 1.0, 0.0}
+	return &Monster{Character: Character{Entity: Entity{Pos: pos, Name: "Spider", Rune: 'S'}, HP: 100, Strength: 10, Speed: 1.0, AP: 0.0}}
 }
 
 func (m *Monster) Update(level *Level) {
@@ -45,5 +39,19 @@ func (m *Monster) Move(to Pos, level *Level) {
 		delete(level.Monsters, m.Pos)
 		level.Monsters[to] = m
 		m.Pos = to
+	} else {
+		Attack(&m.Character, &level.Player.Character)
+		fmt.Println("Player HP:", level.Player.HP)
+		fmt.Println("Monster HP:", m.HP)
+
+		if m.HP <= 0 {
+			delete(level.Monsters, m.Pos)
+		}
+
+		if level.Player.HP <= 0 {
+			fmt.Println("You Died")
+			panic("You Died")
+		}
+
 	}
 }
