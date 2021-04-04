@@ -5,11 +5,11 @@ type Monster struct {
 }
 
 func NewRat(pos Pos) *Monster {
-	return &Monster{Character: Character{Entity: Entity{Pos: pos, Name: "Rat", Rune: 'R'}, HP: 200, Strength: 0, Speed: 2.0, AP: 0.0}}
+	return &Monster{Character: Character{Entity: Entity{Pos: pos, Name: "Rat", Rune: 'R'}, HP: 200, Strength: 0, Speed: 2.0, AP: 0.0, SightRange: 10}}
 }
 
 func NewSpider(pos Pos) *Monster {
-	return &Monster{Character: Character{Entity: Entity{Pos: pos, Name: "Spider", Rune: 'S'}, HP: 100, Strength: 0, Speed: 1.0, AP: 0.0}}
+	return &Monster{Character: Character{Entity: Entity{Pos: pos, Name: "Spider", Rune: 'S'}, HP: 100, Strength: 0, Speed: 1.0, AP: 0.0, SightRange: 10}}
 }
 
 func (m *Monster) Update(level *Level) {

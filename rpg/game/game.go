@@ -67,10 +67,11 @@ type Entity struct {
 
 type Character struct {
 	Entity
-	HP       int
-	Strength int
-	Speed    float64
-	AP       float64
+	HP         int
+	Strength   int
+	Speed      float64
+	AP         float64
+	SightRange int
 }
 
 type Player struct {
@@ -104,7 +105,44 @@ func (level *Level) AddEvent(event string) {
 	if level.EventPos == len(level.Events) {
 		level.EventPos = 0
 	}
+}
 
+func bresenham(start, end Pos) []Pos {
+	result := make([]Pos, 0)
+	steep := math.Abs(float64(end.Y-start.Y)) > math.Abs(float64(end.X-start.X))
+
+	if steep {
+		start.X, start.Y = start.Y, start.X
+		end.X, end.Y = end.Y, end.X
+	}
+	if start.X > end.X {
+		start.X, end.X = end.X, start.X
+		start.Y, end.Y = end.Y, start.Y
+	}
+
+	deltaX := end.X - start.X
+	deltaY := math.Abs(float64(end.Y - start.Y))
+	err := 0
+	y := start.Y
+	ystep := 1
+
+	if start.Y >= end.Y {
+		ystep = -1
+	}
+
+	for x := start.X; x < end.X; x++ {
+		if steep {
+			result = append(result, Pos{y, x})
+		} else {
+			result = append(result, Pos{x, y})
+		}
+		err += int(deltaY)
+		if 2*err >= deltaX {
+			y += ystep
+			err -= deltaX
+		}
+	}
+	return result
 }
 
 func loadLevelFromFile(filename string) *Level {
@@ -127,14 +165,15 @@ func loadLevelFromFile(filename string) *Level {
 	}
 	level := &Level{}
 
+	// level.Debug = make(map[Pos]bool, 0)
 	level.Events = make([]string, 10)
-
 	level.Player.Name = "Dralanor"
 	level.Player.Rune = '@'
 	level.Player.HP = 20
 	level.Player.Strength = 20
 	level.Player.Speed = 1
 	level.Player.AP = 0
+	level.Player.SightRange = 10
 
 	level.Map = make([][]Tile, len(levelLines))
 	level.Monsters = make(map[Pos]*Monster)
@@ -203,6 +242,16 @@ func canWalk(level *Level, pos Pos) bool {
 	return false
 }
 
+func canSeeThrough(level *Level, pos Pos) bool {
+	t := level.Map[pos.Y][pos.X]
+	switch t.Rune {
+	case StoneWall, ClosedDoor, Blank:
+		return false
+	default:
+		return true
+	}
+}
+
 func checkDoor(level *Level, pos Pos) {
 	t := level.Map[pos.Y][pos.X]
 
@@ -213,6 +262,20 @@ func checkDoor(level *Level, pos Pos) {
 
 func (player *Player) Move(to Pos, level *Level) {
 	player.Pos = to
+	for _, row := range level.Map {
+		for _, tile := range row {
+			tile.Visible = false
+		}
+	}
+	line := bresenham(player.Pos, Pos{player.X, player.Y - player.SightRange})
+
+	for _, pos := range line {
+		if canSeeThrough(level, pos) {
+			level.Map[pos.Y][pos.X].Visible = true
+		} else {
+			break
+		}
+	}
 }
 
 func (level *Level) resolveMovement(pos Pos) {
@@ -377,7 +440,15 @@ func (gameStruct *Game) Run() {
 		if input.Type == QuitGame {
 			return
 		}
+
+		// p := gameStruct.Level.Player.Pos
+		// line := bresenham(p, Pos{X: p.X + 5, Y: p.Y + 5})
+		// for _, pos := range line {
+		// 	gameStruct.Level.Debug[pos] = true
+		// }
+
 		gameStruct.handleInput(input)
+
 		for _, monster := range gameStruct.Level.Monsters {
 			monster.Update(gameStruct.Level)
 		}

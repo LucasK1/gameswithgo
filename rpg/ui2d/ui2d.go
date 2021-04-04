@@ -277,7 +277,7 @@ func (ui *ui) Draw(level *game.Level) {
 
 	for y, row := range level.Map {
 		for x, tile := range row {
-			if tile.Rune != game.Blank {
+			if tile.Rune != game.Blank && tile.Visible {
 				srcRects := ui.textureIndex[tile.Rune]
 				srcRect := srcRects[ui.r.Intn(len(srcRects))]
 				dstRect := sdl.Rect{X: int32(x)*32 + offsetX, Y: int32(y)*32 + offsetY, W: 32, H: 32}
@@ -295,8 +295,12 @@ func (ui *ui) Draw(level *game.Level) {
 	}
 
 	for pos, monster := range level.Monsters {
-		monsterSrcRect := ui.textureIndex[monster.Rune][0]
-		ui.renderer.Copy(ui.textureAtlas, &monsterSrcRect, &sdl.Rect{X: int32(pos.X)*32 + offsetX, Y: int32(pos.Y)*32 + offsetY, W: 32, H: 32})
+
+		if level.Map[pos.Y][pos.X].Visible {
+			monsterSrcRect := ui.textureIndex[monster.Rune][0]
+
+			ui.renderer.Copy(ui.textureAtlas, &monsterSrcRect, &sdl.Rect{X: int32(pos.X)*32 + offsetX, Y: int32(pos.Y)*32 + offsetY, W: 32, H: 32})
+		}
 	}
 
 	playerSrcRect := ui.textureIndex['@'][0]
