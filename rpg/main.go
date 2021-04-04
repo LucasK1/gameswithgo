@@ -12,6 +12,6 @@ func main() {
 		ui := ui2d.NewUI(game.InputChan, game.LevelChans[0])
 		ui.Run()
 	}()
-
 	game.Run()
+
 }

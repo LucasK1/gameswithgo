@@ -79,6 +79,7 @@ type Level struct {
 	Player   Player
 	Monsters map[Pos]*Monster
 	Events   []string
+	EventPos int
 	Debug    map[Pos]bool
 }
 
@@ -113,11 +114,15 @@ func (c *Character) GetAttackPower() int {
 func Attack(a1, a2 Attackable) {
 	a1.SetAP(a1.GetAP() - 1)
 	a2.SetHP(a2.GetHP() - a1.GetAttackPower())
+}
 
-	if a2.GetHP() > 0 {
-		a2.SetAP(a2.GetAP() - 1)
-		a1.SetHP(a1.GetHP() - a2.GetAttackPower())
+func (level *Level) AddEvent(event string) {
+	level.Events[level.EventPos] = event
+	level.EventPos++
+	if level.EventPos == len(level.Events) {
+		level.EventPos = 0
 	}
+
 }
 
 func loadLevelFromFile(filename string) *Level {
@@ -140,7 +145,7 @@ func loadLevelFromFile(filename string) *Level {
 	}
 	level := &Level{}
 
-	level.Events = make([]string, 0)
+	level.Events = make([]string, 10)
 
 	level.Player.Name = "Dralanor"
 	level.Player.Rune = '@'
@@ -229,10 +234,11 @@ func (player *Player) Move(to Pos, level *Level) {
 	if !exists {
 		player.Pos = to
 	} else {
-		Attack(&level.Player.Character, &monster.Character)
-		level.Events = append(level.Events, "Player attacked monster")
+		Attack(&player.Character, &monster.Character)
+		level.AddEvent(player.Name + " attacked monster")
 
 		if monster.HP <= 0 {
+			level.AddEvent(player.Name + " killed the " + monster.Name)
 			delete(level.Monsters, monster.Pos)
 		}
 

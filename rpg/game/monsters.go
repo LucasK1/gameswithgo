@@ -22,6 +22,11 @@ func (m *Monster) Update(level *Level) {
 
 	positions := level.astar(m.Pos, playerPos)
 
+	if len(positions) == 0 {
+		m.Pass()
+		return
+	}
+
 	moveIndex := 1
 	for i := 0; i < apInt; i++ {
 		if moveIndex < len(positions) {
@@ -32,18 +37,27 @@ func (m *Monster) Update(level *Level) {
 	}
 }
 
+func (m *Monster) Pass() {
+	m.AP -= m.Speed
+}
+
 func (m *Monster) Move(to Pos, level *Level) {
 	_, exists := level.Monsters[to]
 	if !exists && to != level.Player.Pos {
 		delete(level.Monsters, m.Pos)
 		level.Monsters[to] = m
 		m.Pos = to
-	} else {
+		return
+	}
+	if to == level.Player.Pos {
+
+		level.AddEvent(m.Name + " attacks " + level.Player.Name + "!")
 		Attack(&m.Character, &level.Player.Character)
 		fmt.Println("Player HP:", level.Player.HP)
 		fmt.Println("Monster HP:", m.HP)
 
 		if m.HP <= 0 {
+			level.AddEvent(level.Player.Name + " killed the " + m.Name)
 			delete(level.Monsters, m.Pos)
 		}
 
@@ -51,6 +65,6 @@ func (m *Monster) Move(to Pos, level *Level) {
 			fmt.Println("You Died")
 			panic("You Died")
 		}
-
 	}
+
 }

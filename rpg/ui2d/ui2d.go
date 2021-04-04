@@ -70,7 +70,7 @@ func NewUI(inputChan chan *game.Input, levelChan chan *game.Level) *ui {
 	ui.centerX = -1
 	ui.centerY = -1
 
-	ui.fontSmall, err = ttf.OpenFont("ui2d/assets/font.ttf", 24)
+	ui.fontSmall, err = ttf.OpenFont("ui2d/assets/font.ttf", 18)
 	if err != nil {
 		panic(err)
 	}
@@ -298,18 +298,34 @@ func (ui *ui) Draw(level *game.Level) {
 
 	ui.renderer.Copy(ui.textureAtlas, &playerSrcRect, &sdl.Rect{X: int32(p.X)*32 + offsetX, Y: int32(p.Y)*32 + offsetY, W: 32, H: 32})
 
-	for i, event := range level.Events {
-		tex := ui.stringToTexture(event, sdl.Color{R: 255, G: 0, B: 0, A: 0}, FontLarge)
-		_, _, w, h, err := tex.Query()
-		if err != nil {
-			panic(err)
+	textStartY := int(float64(ui.winHeight) * 0.75)
+	i := level.EventPos
+	for {
+		event := level.Events[i]
+		if event != "" {
+			tex := ui.stringToTexture(event, sdl.Color{R: 255, G: 0, B: 0, A: 0}, FontSmall)
+			_, _, w, h, err := tex.Query()
+			if err != nil {
+				panic(err)
+			}
+			ui.renderer.Copy(tex, nil, &sdl.Rect{X: 0, Y: int32(i)*18 + int32(textStartY), W: w, H: h})
 		}
-		ui.renderer.Copy(tex, nil, &sdl.Rect{X: 0, Y: int32(i) * 64, W: w, H: h})
+		i = (i + 1) % len(level.Events)
+		if i == level.EventPos {
+			break
+		}
 	}
 
 	ui.renderer.Present()
-
 }
+
+func (ui *ui) keyDownOnce(key uint8) bool {
+	return ui.keyboardState[key] == 1 && ui.prevKeyboardState[key] == 0
+}
+
+// func (ui *ui) keyPressed(key uint8) bool {
+// 	return ui.keyboardState[key] == 0 && ui.prevKeyboardState[key] == 1
+// }
 
 func (ui *ui) Run() {
 
@@ -335,20 +351,17 @@ func (ui *ui) Run() {
 
 		if sdl.GetKeyboardFocus() == ui.window || sdl.GetMouseFocus() == ui.window {
 			var input game.Input
-			if ui.keyboardState[sdl.SCANCODE_UP] == 1 && ui.prevKeyboardState[sdl.SCANCODE_UP] == 0 {
+			if ui.keyDownOnce(sdl.SCANCODE_UP) {
 				input.Type = game.Up
 			}
-			if ui.keyboardState[sdl.SCANCODE_DOWN] == 1 && ui.prevKeyboardState[sdl.SCANCODE_DOWN] == 0 {
+			if ui.keyDownOnce(sdl.SCANCODE_DOWN) {
 				input.Type = game.Down
 			}
-			if ui.keyboardState[sdl.SCANCODE_LEFT] == 1 && ui.prevKeyboardState[sdl.SCANCODE_LEFT] == 0 {
+			if ui.keyDownOnce(sdl.SCANCODE_LEFT) {
 				input.Type = game.Left
 			}
-			if ui.keyboardState[sdl.SCANCODE_RIGHT] == 1 && ui.prevKeyboardState[sdl.SCANCODE_RIGHT] == 0 {
+			if ui.keyDownOnce(sdl.SCANCODE_RIGHT) {
 				input.Type = game.Right
-			}
-			if ui.keyboardState[sdl.SCANCODE_S] == 1 && ui.prevKeyboardState[sdl.SCANCODE_S] == 0 {
-				input.Type = game.Search
 			}
 
 			copy(ui.prevKeyboardState, ui.keyboardState)
