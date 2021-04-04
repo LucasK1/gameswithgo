@@ -19,7 +19,7 @@ type ui struct {
 	renderer          *sdl.Renderer
 	window            *sdl.Window
 	textureAtlas      *sdl.Texture
-	textureIndex      map[game.Tile][]sdl.Rect
+	textureIndex      map[rune][]sdl.Rect
 	keyboardState     []uint8
 	prevKeyboardState []uint8
 	centerX           int
@@ -33,6 +33,7 @@ type ui struct {
 	strToTexSm        map[string]*sdl.Texture
 	strToTexMd        map[string]*sdl.Texture
 	strToTexLg        map[string]*sdl.Texture
+	eventBackground   *sdl.Texture
 }
 
 func NewUI(inputChan chan *game.Input, levelChan chan *game.Level) *ui {
@@ -70,7 +71,7 @@ func NewUI(inputChan chan *game.Input, levelChan chan *game.Level) *ui {
 	ui.centerX = -1
 	ui.centerY = -1
 
-	ui.fontSmall, err = ttf.OpenFont("ui2d/assets/font.ttf", 18)
+	ui.fontSmall, err = ttf.OpenFont("ui2d/assets/font.ttf", int(float64(ui.winHeight)*0.025))
 	if err != nil {
 		panic(err)
 	}
@@ -82,6 +83,10 @@ func NewUI(inputChan chan *game.Input, levelChan chan *game.Level) *ui {
 	if err != nil {
 		panic(err)
 	}
+
+	ui.eventBackground = ui.GetSinglePixelTex(sdl.Color{R: 0, G: 0, B: 0, A: 156})
+	ui.eventBackground.SetBlendMode(sdl.BLENDMODE_BLEND)
+
 	return ui
 }
 
@@ -142,7 +147,7 @@ func (ui *ui) stringToTexture(s string, color sdl.Color, size FontSize) *sdl.Tex
 }
 
 func (ui *ui) loadTextureIndex() {
-	ui.textureIndex = make(map[game.Tile][]sdl.Rect)
+	ui.textureIndex = make(map[rune][]sdl.Rect)
 
 	infile, err := os.Open("ui2d/assets/atlas-index.txt")
 	if err != nil {
@@ -153,7 +158,7 @@ func (ui *ui) loadTextureIndex() {
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 
-		tileRune := game.Tile(line[0])
+		tileRune := rune(line[0])
 		xy := line[1:]
 
 		splitXYC := strings.Split(xy, ",")
@@ -272,8 +277,8 @@ func (ui *ui) Draw(level *game.Level) {
 
 	for y, row := range level.Map {
 		for x, tile := range row {
-			if tile != game.Blank {
-				srcRects := ui.textureIndex[tile]
+			if tile.Rune != game.Blank {
+				srcRects := ui.textureIndex[tile.Rune]
 				srcRect := srcRects[ui.r.Intn(len(srcRects))]
 				dstRect := sdl.Rect{X: int32(x)*32 + offsetX, Y: int32(y)*32 + offsetY, W: 32, H: 32}
 
@@ -290,7 +295,7 @@ func (ui *ui) Draw(level *game.Level) {
 	}
 
 	for pos, monster := range level.Monsters {
-		monsterSrcRect := ui.textureIndex[game.Tile(monster.Rune)][0]
+		monsterSrcRect := ui.textureIndex[monster.Rune][0]
 		ui.renderer.Copy(ui.textureAtlas, &monsterSrcRect, &sdl.Rect{X: int32(pos.X)*32 + offsetX, Y: int32(pos.Y)*32 + offsetY, W: 32, H: 32})
 	}
 
@@ -298,8 +303,16 @@ func (ui *ui) Draw(level *game.Level) {
 
 	ui.renderer.Copy(ui.textureAtlas, &playerSrcRect, &sdl.Rect{X: int32(p.X)*32 + offsetX, Y: int32(p.Y)*32 + offsetY, W: 32, H: 32})
 
-	textStartY := int(float64(ui.winHeight) * 0.75)
+	textStart := int32(float64(ui.winHeight) * 0.69)
+	textWidth := int32(float64(ui.winWidth) * 0.25)
+
+	ui.renderer.Copy(ui.eventBackground, nil, &sdl.Rect{X: 0, Y: textStart, W: textWidth, H: int32(ui.winHeight) - textStart})
+
 	i := level.EventPos
+	count := 0
+
+	_, fontSizeY, _ := ui.fontSmall.SizeUTF8("A")
+
 	for {
 		event := level.Events[i]
 		if event != "" {
@@ -308,12 +321,13 @@ func (ui *ui) Draw(level *game.Level) {
 			if err != nil {
 				panic(err)
 			}
-			ui.renderer.Copy(tex, nil, &sdl.Rect{X: 0, Y: int32(i)*18 + int32(textStartY), W: w, H: h})
+			ui.renderer.Copy(tex, nil, &sdl.Rect{X: 5, Y: int32(count*fontSizeY) + textStart, W: w, H: h})
 		}
 		i = (i + 1) % len(level.Events)
 		if i == level.EventPos {
 			break
 		}
+		count++
 	}
 
 	ui.renderer.Present()
@@ -326,6 +340,21 @@ func (ui *ui) keyDownOnce(key uint8) bool {
 // func (ui *ui) keyPressed(key uint8) bool {
 // 	return ui.keyboardState[key] == 0 && ui.prevKeyboardState[key] == 1
 // }
+
+func (ui *ui) GetSinglePixelTex(color sdl.Color) *sdl.Texture {
+	tex, err := ui.renderer.CreateTexture(sdl.PIXELFORMAT_ABGR8888, sdl.TEXTUREACCESS_STATIC, 1, 1)
+	if err != nil {
+		panic(err)
+	}
+	pixels := make([]byte, 4)
+	pixels[0] = color.R
+	pixels[1] = color.G
+	pixels[2] = color.B
+	pixels[3] = color.A
+
+	tex.Update(nil, pixels, 4)
+	return tex
+}
 
 func (ui *ui) Run() {
 

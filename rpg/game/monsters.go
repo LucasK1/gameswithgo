@@ -1,17 +1,15 @@
 package game
 
-import "fmt"
-
 type Monster struct {
 	Character
 }
 
 func NewRat(pos Pos) *Monster {
-	return &Monster{Character: Character{Entity: Entity{Pos: pos, Name: "Rat", Rune: 'R'}, HP: 500, Strength: 0, Speed: 2.0, AP: 0.0}}
+	return &Monster{Character: Character{Entity: Entity{Pos: pos, Name: "Rat", Rune: 'R'}, HP: 200, Strength: 0, Speed: 2.0, AP: 0.0}}
 }
 
 func NewSpider(pos Pos) *Monster {
-	return &Monster{Character: Character{Entity: Entity{Pos: pos, Name: "Spider", Rune: 'S'}, HP: 1000, Strength: 0, Speed: 1.0, AP: 0.0}}
+	return &Monster{Character: Character{Entity: Entity{Pos: pos, Name: "Spider", Rune: 'S'}, HP: 100, Strength: 0, Speed: 1.0, AP: 0.0}}
 }
 
 func (m *Monster) Update(level *Level) {
@@ -50,20 +48,13 @@ func (m *Monster) Move(to Pos, level *Level) {
 		return
 	}
 	if to == level.Player.Pos {
-
-		level.AddEvent(m.Name + " attacks " + level.Player.Name + "!")
-		Attack(&m.Character, &level.Player.Character)
-		fmt.Println("Player HP:", level.Player.HP)
-		fmt.Println("Monster HP:", m.HP)
+		level.Attack(&m.Character, &level.Player.Character)
 
 		if m.HP <= 0 {
-			level.AddEvent(level.Player.Name + " killed the " + m.Name)
 			delete(level.Monsters, m.Pos)
 		}
-
 		if level.Player.HP <= 0 {
-			fmt.Println("You Died")
-			panic("You Died")
+			panic("DEAD")
 		}
 	}
 

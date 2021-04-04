@@ -2,9 +2,9 @@ package game
 
 import (
 	"bufio"
-	"fmt"
 	"math"
 	"os"
+	"strconv"
 )
 
 type Game struct {
@@ -41,15 +41,18 @@ type Input struct {
 	LevelChannel chan *Level
 }
 
-type Tile rune
+type Tile struct {
+	Rune    rune
+	Visible bool
+}
 
 const (
-	StoneWall  Tile = '#'
-	DirtFloor  Tile = '.'
-	ClosedDoor Tile = '|'
-	OpenDoor   Tile = '/'
-	Blank      Tile = 0
-	Pending    Tile = -1
+	StoneWall  rune = '#'
+	DirtFloor  rune = '.'
+	ClosedDoor rune = '|'
+	OpenDoor   rune = '/'
+	Blank      rune = 0
+	Pending    rune = -1
 )
 
 type Pos struct {
@@ -83,37 +86,16 @@ type Level struct {
 	Debug    map[Pos]bool
 }
 
-type Attackable interface {
-	GetAP() float64
-	SetAP(float64)
-	GetHP() int
-	SetHP(int)
-	GetAttackPower() int
-}
+func (level *Level) Attack(c1, c2 *Character) {
+	c1.AP--
+	c1AttackPower := c1.Strength
+	c2.HP -= c1AttackPower
 
-func (c *Character) GetAP() float64 {
-	return c.AP
-}
-
-func (c *Character) SetAP(ap float64) {
-	c.AP = ap
-}
-
-func (c *Character) GetHP() int {
-	return c.HP
-}
-
-func (c *Character) SetHP(hp int) {
-	c.HP = hp
-}
-
-func (c *Character) GetAttackPower() int {
-	return c.Strength
-}
-
-func Attack(a1, a2 Attackable) {
-	a1.SetAP(a1.GetAP() - 1)
-	a2.SetHP(a2.GetHP() - a1.GetAttackPower())
+	if c2.HP > 0 {
+		level.AddEvent(c1.Name + " attacked " + c2.Name + " for " + strconv.Itoa(c1AttackPower))
+	} else {
+		level.AddEvent(c1.Name + " killed " + c2.Name)
+	}
 }
 
 func (level *Level) AddEvent(event string) {
@@ -166,25 +148,25 @@ func loadLevelFromFile(filename string) *Level {
 			var t Tile
 			switch character {
 			case ' ', '\t', '\n', '\r':
-				t = Blank
+				t.Rune = Blank
 			case '#':
-				t = StoneWall
+				t.Rune = StoneWall
 			case '|':
-				t = ClosedDoor
+				t.Rune = ClosedDoor
 			case '/':
-				t = OpenDoor
+				t.Rune = OpenDoor
 			case '.':
-				t = DirtFloor
+				t.Rune = DirtFloor
 			case '@':
 				level.Player.X = x
 				level.Player.Y = y
-				t = Pending
+				t.Rune = Pending
 			case 'R':
 				level.Monsters[Pos{x, y}] = NewRat(Pos{x, y})
-				t = Pending
+				t.Rune = Pending
 			case 'S':
 				level.Monsters[Pos{x, y}] = NewSpider(Pos{x, y})
-				t = Pending
+				t.Rune = Pending
 			default:
 				panic("Invalid character in map")
 			}
@@ -194,7 +176,7 @@ func loadLevelFromFile(filename string) *Level {
 
 	for y, row := range level.Map {
 		for x, tile := range row {
-			if tile == Pending {
+			if tile.Rune == Pending {
 
 				level.Map[y][x] = level.bfsFloor(Pos{x, y})
 			}
@@ -211,12 +193,12 @@ func inRange(level *Level, pos Pos) bool {
 func canWalk(level *Level, pos Pos) bool {
 	if inRange(level, pos) {
 		t := level.Map[pos.Y][pos.X]
-		switch t {
+		switch t.Rune {
 		case StoneWall, ClosedDoor, Blank:
 			return false
-		default:
-			return true
 		}
+		_, exists := level.Monsters[pos]
+		return !exists
 	}
 	return false
 }
@@ -224,29 +206,29 @@ func canWalk(level *Level, pos Pos) bool {
 func checkDoor(level *Level, pos Pos) {
 	t := level.Map[pos.Y][pos.X]
 
-	if t == ClosedDoor {
-		level.Map[pos.Y][pos.X] = OpenDoor
+	if t.Rune == ClosedDoor {
+		level.Map[pos.Y][pos.X].Rune = OpenDoor
 	}
 }
 
 func (player *Player) Move(to Pos, level *Level) {
-	monster, exists := level.Monsters[to]
-	if !exists {
-		player.Pos = to
-	} else {
-		Attack(&player.Character, &monster.Character)
-		level.AddEvent(player.Name + " attacked monster")
+	player.Pos = to
+}
 
+func (level *Level) resolveMovement(pos Pos) {
+	monster, exists := level.Monsters[pos]
+	if exists {
+		level.Attack(&level.Player.Character, &monster.Character)
 		if monster.HP <= 0 {
-			level.AddEvent(player.Name + " killed the " + monster.Name)
 			delete(level.Monsters, monster.Pos)
 		}
-
 		if level.Player.HP <= 0 {
-			fmt.Println("You Died")
-			panic("You Died")
+			panic("DEAD")
 		}
-
+	} else if canWalk(level, pos) {
+		level.Player.Move(pos, level)
+	} else {
+		checkDoor(level, pos)
 	}
 }
 
@@ -256,40 +238,19 @@ func (gameStruct *Game) handleInput(input *Input) {
 	switch input.Type {
 	case Up:
 		newPos := Pos{X: p.X, Y: p.Y - 1}
-		if canWalk(level, newPos) {
-			level.Player.Move(newPos, level)
-		} else {
-			checkDoor(level, newPos)
-		}
+		level.resolveMovement(newPos)
 
 	case Down:
 		newPos := Pos{X: p.X, Y: p.Y + 1}
-		if canWalk(level, newPos) {
-			level.Player.Move(newPos, level)
-
-		} else {
-			checkDoor(level, newPos)
-		}
+		level.resolveMovement(newPos)
 
 	case Left:
 		newPos := Pos{X: p.X - 1, Y: p.Y}
-		if canWalk(level, newPos) {
-			level.Player.Move(newPos, level)
-
-		} else {
-			checkDoor(level, newPos)
-		}
+		level.resolveMovement(newPos)
 
 	case Right:
 		newPos := Pos{p.X + 1, p.Y}
-		if canWalk(level, newPos) {
-			level.Player.Move(newPos, level)
-		} else {
-			checkDoor(level, newPos)
-		}
-
-	case Search:
-		level.astar(level.Player.Pos, Pos{X: 3, Y: 3})
+		level.resolveMovement(newPos)
 
 	case CloseWindow:
 		close(input.LevelChannel)
@@ -335,15 +296,14 @@ func (level *Level) bfsFloor(start Pos) Tile {
 
 	visited := make(map[Pos]bool)
 	visited[start] = true
-	level.Debug = visited
 
 	for len(frontier) > 0 {
 		current := frontier[0]
 
 		currentTile := level.Map[current.Y][current.X]
-		switch currentTile {
+		switch currentTile.Rune {
 		case DirtFloor:
-			return DirtFloor
+			return Tile{DirtFloor, false}
 		default:
 		}
 
@@ -355,7 +315,7 @@ func (level *Level) bfsFloor(start Pos) Tile {
 			}
 		}
 	}
-	return DirtFloor
+	return Tile{DirtFloor, false}
 }
 
 func (level *Level) astar(start Pos, goal Pos) []Pos {
