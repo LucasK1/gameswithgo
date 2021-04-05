@@ -42,8 +42,10 @@ type Input struct {
 }
 
 type Tile struct {
-	Rune    rune
-	Visible bool
+	Rune        rune
+	OverlayRune rune
+	Visible     bool
+	Seen        bool
 }
 
 const (
@@ -51,6 +53,8 @@ const (
 	DirtFloor  rune = '.'
 	ClosedDoor rune = '|'
 	OpenDoor   rune = '/'
+	UpStair    rune = 'u'
+	DownStair  rune = 'd'
 	Blank      rune = 0
 	Pending    rune = -1
 )
@@ -152,6 +156,7 @@ func (level *Level) bresenham(start, end Pos) {
 
 			}
 			level.Map[pos.Y][pos.X].Visible = true
+			level.Map[pos.Y][pos.X].Seen = true
 			if !canSeeThrough(level, pos) {
 				return
 			}
@@ -174,6 +179,7 @@ func (level *Level) bresenham(start, end Pos) {
 
 			}
 			level.Map[pos.Y][pos.X].Visible = true
+			level.Map[pos.Y][pos.X].Seen = true
 			if !canSeeThrough(level, pos) {
 				return
 			}
@@ -229,12 +235,21 @@ func loadLevelFromFile(filename string) *Level {
 			switch character {
 			case ' ', '\t', '\n', '\r':
 				t.Rune = Blank
+				t.OverlayRune = Blank
 			case '#':
 				t.Rune = StoneWall
 			case '|':
-				t.Rune = ClosedDoor
+				t.OverlayRune = ClosedDoor
+				t.Rune = Pending
 			case '/':
-				t.Rune = OpenDoor
+				t.OverlayRune = OpenDoor
+				t.Rune = Pending
+			case 'u':
+				t.OverlayRune = UpStair
+				t.Rune = Pending
+			case 'd':
+				t.OverlayRune = DownStair
+				t.Rune = Pending
 			case '.':
 				t.Rune = DirtFloor
 			case '@':
@@ -258,7 +273,7 @@ func loadLevelFromFile(filename string) *Level {
 		for x, tile := range row {
 			if tile.Rune == Pending {
 
-				level.Map[y][x] = level.bfsFloor(Pos{x, y})
+				level.Map[y][x].Rune = level.bfsFloor(Pos{x, y})
 			}
 		}
 	}
@@ -274,7 +289,11 @@ func canWalk(level *Level, pos Pos) bool {
 	if inRange(level, pos) {
 		t := level.Map[pos.Y][pos.X]
 		switch t.Rune {
-		case StoneWall, ClosedDoor, Blank:
+		case StoneWall, Blank:
+			return false
+		}
+		switch t.OverlayRune {
+		case ClosedDoor:
 			return false
 		}
 		_, exists := level.Monsters[pos]
@@ -287,7 +306,11 @@ func canSeeThrough(level *Level, pos Pos) bool {
 	if inRange(level, pos) {
 		t := level.Map[pos.Y][pos.X]
 		switch t.Rune {
-		case StoneWall, ClosedDoor, Blank:
+		case StoneWall, Blank:
+			return false
+		}
+		switch t.OverlayRune {
+		case ClosedDoor:
 			return false
 		default:
 			return true
@@ -299,8 +322,8 @@ func canSeeThrough(level *Level, pos Pos) bool {
 func checkDoor(level *Level, pos Pos) {
 	t := level.Map[pos.Y][pos.X]
 
-	if t.Rune == ClosedDoor {
-		level.Map[pos.Y][pos.X].Rune = OpenDoor
+	if t.OverlayRune == ClosedDoor {
+		level.Map[pos.Y][pos.X].OverlayRune = OpenDoor
 		level.lineOfSight()
 	}
 }
@@ -390,7 +413,7 @@ func getNeighbors(level *Level, pos Pos) []Pos {
 	return neighbors
 }
 
-func (level *Level) bfsFloor(start Pos) Tile {
+func (level *Level) bfsFloor(start Pos) rune {
 	frontier := make([]Pos, 0, 8)
 
 	frontier = append(frontier, start)
@@ -400,11 +423,10 @@ func (level *Level) bfsFloor(start Pos) Tile {
 
 	for len(frontier) > 0 {
 		current := frontier[0]
-
 		currentTile := level.Map[current.Y][current.X]
 		switch currentTile.Rune {
 		case DirtFloor:
-			return Tile{DirtFloor, false}
+			return DirtFloor
 		default:
 		}
 
@@ -416,7 +438,7 @@ func (level *Level) bfsFloor(start Pos) Tile {
 			}
 		}
 	}
-	return Tile{DirtFloor, false}
+	return DirtFloor
 }
 
 func (level *Level) astar(start Pos, goal Pos) []Pos {

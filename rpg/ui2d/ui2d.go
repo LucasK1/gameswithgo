@@ -280,21 +280,30 @@ func (ui *ui) Draw(level *game.Level) {
 			if tile.Rune != game.Blank {
 				srcRects := ui.textureIndex[tile.Rune]
 				srcRect := srcRects[ui.r.Intn(len(srcRects))]
-				if tile.Visible {
+				if tile.Visible || tile.Seen {
 					dstRect := sdl.Rect{X: int32(x)*32 + offsetX, Y: int32(y)*32 + offsetY, W: 32, H: 32}
 
 					pos := game.Pos{X: x, Y: y}
 					if level.Debug[pos] {
 						ui.textureAtlas.SetColorMod(128, 0, 0)
+					} else if tile.Seen && !tile.Visible {
+						ui.textureAtlas.SetColorMod(128, 128, 128)
 					} else {
 						ui.textureAtlas.SetColorMod(255, 255, 255)
 					}
 
 					ui.renderer.Copy(ui.textureAtlas, &srcRect, &dstRect)
+
+					if tile.OverlayRune != game.Blank {
+						srcRect := ui.textureIndex[tile.OverlayRune][0]
+						ui.renderer.Copy(ui.textureAtlas, &srcRect, &dstRect)
+
+					}
 				}
 			}
 		}
 	}
+	ui.textureAtlas.SetColorMod(255, 255, 255)
 
 	for pos, monster := range level.Monsters {
 
