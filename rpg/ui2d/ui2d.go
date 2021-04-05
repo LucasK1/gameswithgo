@@ -277,19 +277,21 @@ func (ui *ui) Draw(level *game.Level) {
 
 	for y, row := range level.Map {
 		for x, tile := range row {
-			if tile.Rune != game.Blank && tile.Visible {
+			if tile.Rune != game.Blank {
 				srcRects := ui.textureIndex[tile.Rune]
 				srcRect := srcRects[ui.r.Intn(len(srcRects))]
-				dstRect := sdl.Rect{X: int32(x)*32 + offsetX, Y: int32(y)*32 + offsetY, W: 32, H: 32}
+				if tile.Visible {
+					dstRect := sdl.Rect{X: int32(x)*32 + offsetX, Y: int32(y)*32 + offsetY, W: 32, H: 32}
 
-				pos := game.Pos{X: x, Y: y}
-				if level.Debug[pos] {
-					ui.textureAtlas.SetColorMod(128, 0, 0)
-				} else {
-					ui.textureAtlas.SetColorMod(255, 255, 255)
+					pos := game.Pos{X: x, Y: y}
+					if level.Debug[pos] {
+						ui.textureAtlas.SetColorMod(128, 0, 0)
+					} else {
+						ui.textureAtlas.SetColorMod(255, 255, 255)
+					}
+
+					ui.renderer.Copy(ui.textureAtlas, &srcRect, &dstRect)
 				}
-
-				ui.renderer.Copy(ui.textureAtlas, &srcRect, &dstRect)
 			}
 		}
 	}

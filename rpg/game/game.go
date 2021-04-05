@@ -107,42 +107,83 @@ func (level *Level) AddEvent(event string) {
 	}
 }
 
-func bresenham(start, end Pos) []Pos {
-	result := make([]Pos, 0)
+func (level *Level) lineOfSight() {
+	pos := level.Player.Pos
+	dist := level.Player.SightRange
+
+	for y := pos.Y - dist; y <= pos.Y+dist; y++ {
+		for x := pos.X - dist; x <= pos.X+dist; x++ {
+			xDelta := pos.X - x
+			yDelta := pos.Y - y
+			d := math.Sqrt(float64(xDelta*xDelta + yDelta*yDelta))
+			if d <= float64(dist) {
+				level.bresenham(pos, Pos{x, y})
+			}
+		}
+	}
+}
+
+func (level *Level) bresenham(start, end Pos) {
 	steep := math.Abs(float64(end.Y-start.Y)) > math.Abs(float64(end.X-start.X))
 
 	if steep {
 		start.X, start.Y = start.Y, start.X
 		end.X, end.Y = end.Y, end.X
 	}
-	if start.X > end.X {
-		start.X, end.X = end.X, start.X
-		start.Y, end.Y = end.Y, start.Y
-	}
 
-	deltaX := end.X - start.X
 	deltaY := math.Abs(float64(end.Y - start.Y))
 	err := 0
 	y := start.Y
 	ystep := 1
-
 	if start.Y >= end.Y {
 		ystep = -1
 	}
 
-	for x := start.X; x < end.X; x++ {
-		if steep {
-			result = append(result, Pos{y, x})
-		} else {
-			result = append(result, Pos{x, y})
+	if start.X > end.X {
+
+		deltaX := start.X - end.X
+
+		for x := start.X; x > end.X; x-- {
+			var pos Pos
+			if steep {
+				pos = Pos{X: y, Y: x}
+			} else {
+				pos = Pos{X: x, Y: y}
+
+			}
+			level.Map[pos.Y][pos.X].Visible = true
+			if !canSeeThrough(level, pos) {
+				return
+			}
+			err += int(deltaY)
+			if 2*err >= deltaX {
+				y += ystep
+				err -= deltaX
+			}
 		}
-		err += int(deltaY)
-		if 2*err >= deltaX {
-			y += ystep
-			err -= deltaX
+	} else {
+
+		deltaX := end.X - start.X
+
+		for x := start.X; x < end.X; x++ {
+			var pos Pos
+			if steep {
+				pos = Pos{X: y, Y: x}
+			} else {
+				pos = Pos{X: x, Y: y}
+
+			}
+			level.Map[pos.Y][pos.X].Visible = true
+			if !canSeeThrough(level, pos) {
+				return
+			}
+			err += int(deltaY)
+			if 2*err >= deltaX {
+				y += ystep
+				err -= deltaX
+			}
 		}
 	}
-	return result
 }
 
 func loadLevelFromFile(filename string) *Level {
@@ -173,7 +214,7 @@ func loadLevelFromFile(filename string) *Level {
 	level.Player.Strength = 20
 	level.Player.Speed = 1
 	level.Player.AP = 0
-	level.Player.SightRange = 10
+	level.Player.SightRange = 7
 
 	level.Map = make([][]Tile, len(levelLines))
 	level.Monsters = make(map[Pos]*Monster)
@@ -221,7 +262,7 @@ func loadLevelFromFile(filename string) *Level {
 			}
 		}
 	}
-
+	level.lineOfSight()
 	return level
 }
 
@@ -243,13 +284,16 @@ func canWalk(level *Level, pos Pos) bool {
 }
 
 func canSeeThrough(level *Level, pos Pos) bool {
-	t := level.Map[pos.Y][pos.X]
-	switch t.Rune {
-	case StoneWall, ClosedDoor, Blank:
-		return false
-	default:
-		return true
+	if inRange(level, pos) {
+		t := level.Map[pos.Y][pos.X]
+		switch t.Rune {
+		case StoneWall, ClosedDoor, Blank:
+			return false
+		default:
+			return true
+		}
 	}
+	return false
 }
 
 func checkDoor(level *Level, pos Pos) {
@@ -257,25 +301,19 @@ func checkDoor(level *Level, pos Pos) {
 
 	if t.Rune == ClosedDoor {
 		level.Map[pos.Y][pos.X].Rune = OpenDoor
+		level.lineOfSight()
 	}
 }
 
 func (player *Player) Move(to Pos, level *Level) {
 	player.Pos = to
-	for _, row := range level.Map {
-		for _, tile := range row {
-			tile.Visible = false
+	for y, row := range level.Map {
+		for x := range row {
+			level.Map[y][x].Visible = false
 		}
 	}
-	line := bresenham(player.Pos, Pos{player.X, player.Y - player.SightRange})
 
-	for _, pos := range line {
-		if canSeeThrough(level, pos) {
-			level.Map[pos.Y][pos.X].Visible = true
-		} else {
-			break
-		}
-	}
+	level.lineOfSight()
 }
 
 func (level *Level) resolveMovement(pos Pos) {
