@@ -9,9 +9,21 @@ import (
 	"strings"
 
 	"github.com/LucasK1/gameswithgo/rpg/game"
+	"github.com/veandco/go-sdl2/mix"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
 )
+
+type sounds struct {
+	doorOpens []*mix.Chunk
+	footsteps []*mix.Chunk
+}
+
+func playRandomSound(chunks []*mix.Chunk, volume int) {
+	chunkIndex := rand.Intn(len(chunks))
+	chunks[chunkIndex].Volume(volume)
+	chunks[chunkIndex].Play(-1, 0)
+}
 
 type ui struct {
 	winWidth          int
@@ -34,6 +46,7 @@ type ui struct {
 	strToTexMd        map[string]*sdl.Texture
 	strToTexLg        map[string]*sdl.Texture
 	eventBackground   *sdl.Texture
+	sounds            sounds
 }
 
 func NewUI(inputChan chan *game.Input, levelChan chan *game.Level) *ui {
@@ -86,6 +99,41 @@ func NewUI(inputChan chan *game.Input, levelChan chan *game.Level) *ui {
 
 	ui.eventBackground = ui.GetSinglePixelTex(sdl.Color{R: 0, G: 0, B: 0, A: 156})
 	ui.eventBackground.SetBlendMode(sdl.BLENDMODE_BLEND)
+
+	err = mix.OpenAudio(22050, mix.DEFAULT_FORMAT, 2, 4096)
+	if err != nil {
+		panic(err)
+	}
+
+	music, err := mix.LoadMUS("ui2d/assets/ambient.ogg")
+	if err != nil {
+		panic(err)
+	}
+
+	err = music.Play(-1)
+	if err != nil {
+		panic(err)
+	}
+
+	footstepBase := "ui2d/assets/footstep0"
+	for i := 0; i < 10; i++ {
+		footstepFile := footstepBase + strconv.Itoa(i) + ".ogg"
+		footstep, err := mix.LoadWAV(footstepFile)
+		if err != nil {
+			panic(err)
+		}
+		ui.sounds.footsteps = append(ui.sounds.footsteps, footstep)
+	}
+
+	doorOpenBase := "ui2d/assets/doorOpen_"
+	for i := 1; i < 3; i++ {
+		doorOpenFile := doorOpenBase + strconv.Itoa(i) + ".ogg"
+		doorOpen, err := mix.LoadWAV(doorOpenFile)
+		if err != nil {
+			panic(err)
+		}
+		ui.sounds.doorOpens = append(ui.sounds.doorOpens, doorOpen)
+	}
 
 	return ui
 }
@@ -246,10 +294,14 @@ func init() {
 		panic(err)
 	}
 
+	err = mix.Init(mix.INIT_OGG)
+	if err != nil {
+		panic(err)
+	}
+
 }
 
 func (ui *ui) Draw(level *game.Level) {
-
 	p := level.Player
 
 	if ui.centerX == -1 && ui.centerY == -1 {
@@ -392,6 +444,14 @@ func (ui *ui) Run() {
 		select {
 		case newLevel, ok := <-ui.levelChan:
 			if ok {
+				switch newLevel.LastEvent {
+				case game.Move:
+					playRandomSound(ui.sounds.footsteps, 10)
+				case game.DoorOpen:
+					playRandomSound(ui.sounds.doorOpens, 32)
+				default:
+
+				}
 				ui.Draw(newLevel)
 			}
 		default:
