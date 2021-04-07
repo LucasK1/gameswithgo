@@ -368,6 +368,7 @@ func loadLevels() map[string]*Level {
 				}
 			}
 		}
+		level.lineOfSight()
 		levels[levelName] = level
 	}
 	return levels

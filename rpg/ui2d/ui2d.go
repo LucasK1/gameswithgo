@@ -260,13 +260,17 @@ func (ui *ui) Draw(level *game.Level) {
 	limit := 5
 
 	if p.X > ui.centerX+limit {
-		ui.centerX++
+		diff := level.Player.X - (ui.centerX + limit)
+		ui.centerX += diff
 	} else if p.X < ui.centerX-limit {
-		ui.centerX--
+		diff := (ui.centerX - limit) - level.Player.X
+		ui.centerX -= diff
 	} else if p.Y > ui.centerY+limit {
-		ui.centerY++
+		diff := level.Player.Y - (ui.centerY + limit)
+		ui.centerY += diff
 	} else if p.Y < ui.centerY-limit {
-		ui.centerY--
+		diff := (ui.centerY - limit) - level.Player.Y
+		ui.centerY -= diff
 	}
 
 	offsetX := int32((ui.winWidth / 2) - ui.centerX*32)
