@@ -222,7 +222,7 @@ func (level *Level) bresenham(start, end Pos) {
 }
 
 func (gameStruct *Game) loadWorldFile() {
-	file, err := os.Open("game/maps/world.txt")
+	file, err := os.Open("/home/lucask/go-dev/src/github.com/LucasK1/gameswithgo/rpg/game/maps/world.txt")
 	if err != nil {
 		panic(err)
 	}
@@ -291,7 +291,7 @@ func loadLevels() map[string]*Level {
 
 	levels := make(map[string]*Level)
 
-	levelpaths, err := filepath.Glob("game/maps/*.map")
+	levelpaths, err := filepath.Glob("/home/lucask/go-dev/src/github.com/LucasK1/gameswithgo/rpg/game/maps/*.map")
 	if err != nil {
 		panic(err)
 	}

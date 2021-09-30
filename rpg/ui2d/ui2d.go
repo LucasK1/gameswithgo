@@ -74,7 +74,7 @@ func NewUI(inputChan chan *game.Input, levelChan chan *game.Level) *ui {
 
 	sdl.SetHint(sdl.HINT_RENDER_SCALE_QUALITY, "1")
 
-	ui.textureAtlas = ui.imgFileToTexture("ui2d/assets/tiles.png")
+	ui.textureAtlas = ui.imgFileToTexture("/home/lucask/go-dev/src/github.com/LucasK1/gameswithgo/rpg/ui2d/assets/tiles.png")
 	ui.loadTextureIndex()
 
 	ui.keyboardState = sdl.GetKeyboardState()
@@ -84,15 +84,15 @@ func NewUI(inputChan chan *game.Input, levelChan chan *game.Level) *ui {
 	ui.centerX = -1
 	ui.centerY = -1
 
-	ui.fontSmall, err = ttf.OpenFont("ui2d/assets/font.ttf", int(float64(ui.winHeight)*0.025))
+	ui.fontSmall, err = ttf.OpenFont("/home/lucask/go-dev/src/github.com/LucasK1/gameswithgo/rpg/ui2d/assets/font.ttf", int(float64(ui.winHeight)*0.025))
 	if err != nil {
 		panic(err)
 	}
-	ui.fontMedium, err = ttf.OpenFont("ui2d/assets/font.ttf", 32)
+	ui.fontMedium, err = ttf.OpenFont("/home/lucask/go-dev/src/github.com/LucasK1/gameswithgo/rpg/ui2d/assets/font.ttf", 32)
 	if err != nil {
 		panic(err)
 	}
-	ui.fontLarge, err = ttf.OpenFont("ui2d/assets/font.ttf", 64)
+	ui.fontLarge, err = ttf.OpenFont("/home/lucask/go-dev/src/github.com/LucasK1/gameswithgo/rpg/ui2d/assets/font.ttf", 64)
 	if err != nil {
 		panic(err)
 	}
@@ -105,7 +105,7 @@ func NewUI(inputChan chan *game.Input, levelChan chan *game.Level) *ui {
 		panic(err)
 	}
 
-	music, err := mix.LoadMUS("ui2d/assets/ambient.ogg")
+	music, err := mix.LoadMUS("/home/lucask/go-dev/src/github.com/LucasK1/gameswithgo/rpg/ui2d/assets/ambient.ogg")
 	if err != nil {
 		panic(err)
 	}
@@ -115,7 +115,7 @@ func NewUI(inputChan chan *game.Input, levelChan chan *game.Level) *ui {
 		panic(err)
 	}
 
-	footstepBase := "ui2d/assets/footstep0"
+	footstepBase := "/home/lucask/go-dev/src/github.com/LucasK1/gameswithgo/rpg/ui2d/assets/footstep0"
 	for i := 0; i < 10; i++ {
 		footstepFile := footstepBase + strconv.Itoa(i) + ".ogg"
 		footstep, err := mix.LoadWAV(footstepFile)
@@ -125,7 +125,7 @@ func NewUI(inputChan chan *game.Input, levelChan chan *game.Level) *ui {
 		ui.sounds.footsteps = append(ui.sounds.footsteps, footstep)
 	}
 
-	doorOpenBase := "ui2d/assets/doorOpen_"
+	doorOpenBase := "/home/lucask/go-dev/src/github.com/LucasK1/gameswithgo/rpg/ui2d/assets/doorOpen_"
 	for i := 1; i < 3; i++ {
 		doorOpenFile := doorOpenBase + strconv.Itoa(i) + ".ogg"
 		doorOpen, err := mix.LoadWAV(doorOpenFile)
@@ -197,7 +197,7 @@ func (ui *ui) stringToTexture(s string, color sdl.Color, size FontSize) *sdl.Tex
 func (ui *ui) loadTextureIndex() {
 	ui.textureIndex = make(map[rune][]sdl.Rect)
 
-	infile, err := os.Open("ui2d/assets/atlas-index.txt")
+	infile, err := os.Open("/home/lucask/go-dev/src/github.com/LucasK1/gameswithgo/rpg/ui2d/assets/atlas-index.txt")
 	if err != nil {
 		panic(err)
 	}
